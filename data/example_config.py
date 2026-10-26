@@ -203,6 +203,21 @@ config: dict[str, Any] = {
         "skip_auto_torrent_personalrelease": False,
         # Set to True to prefer torrents with a piece size of 16 MiB or less when searching configured clients.
         "prefer_max_16_torrent": False,
+        # Before hashing with mkbrr, reuse a .torrent that already sits in the content's own
+        # directory (matched by file layout + total size). Set False to disable.
+        "search_torrent_dir": True,
+        # Optional extra directories to scan for a reusable .torrent (list of paths).
+        "torrent_dir_search": [],
+        # Before hashing with mkbrr, search the trackers you are on (any with an api_key) for the
+        # release and reuse a validated .torrent. Set False to disable.
+        "search_trackers_for_torrent": True,
+        # Restrict the tracker search to a specific set of tracker names (list). Empty = every
+        # tracker you have an api_key configured for.
+        "search_torrent_trackers": [],
+        # Fraction the tracker-reported size may differ from the local total before a candidate is
+        # downloaded (0 = exact, with a small container/metadata allowance). The real check is the
+        # file-layout validation applied after download.
+        "search_torrent_size_tolerance": 0.0,
         # Import policy for releases found on other trackers. Choose one:
         # - "ids": import only IMDb/TMDb/TVDb/MAL IDs and related release metadata.
         # - "images": import IDs, metadata, and validated description screenshots, but no text.
@@ -352,7 +367,7 @@ config: dict[str, Any] = {
         "xxx_single_file_screens": "0",
         # --- GENERAL DESCRIPTION SETTINGS ---
         # See detailed documentation on how these settings affect description building:
-        # https://github.com/wastaken7/Upload-Assistant/blob/development/docs/description-builder.md
+        # https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/description-builder.md
         # Add a TMDB show or movie logo to the top of the description.
         "add_logo": True,
         # Logo width in pixels.
@@ -554,27 +569,39 @@ config: dict[str, Any] = {
     "TRACKERS": {
         # Which trackers do you want to upload to?
         # Note: Description layout settings (like screenshot grids, logos, etc.) can be overridden per-tracker.
-        # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/description-builder.md
+        # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/description-builder.md
         # Available trackers:
-        #   1PTBA, AITHER, ALPHARATIO, ANTHELION, ASIANCINEMA, AVISTAZ, BEYONDHD, BITHDTV, BITPORN, BJSHARE, BLUTOPIA,
+        #   0DAYFILES, 1PTBA, AITHER, ALPHARATIO, ANTHELION, ASIANCINEMA, AVISTAZ, BEYONDHD, BITHDTV, BITPORN, BJSHARE, BLUTOPIA,
         #   BRASILTRACKER, BROADCASTHENET, CAPYBARABR, CATHODERAYTUBE, CINEMATIK, CINEMAZ, CURUPIRA, DARKPEERS, DESITORRENTS, DIGITALCORE,
-        #   DREADVAULT, DRUNKENSLUG, EMUWAREZ, FILELIST, FLOOD, FUNFILE, GREATPOSTERWALL, HAWKEUNO, HDBITS, HDSPACE, HDTORRENTS, HOMIEHELPDESK,
+        #   DREADVAULT, DRUNKENSLUG, EMUWAREZ, FILELIST, FLOOD, FUNFILE, GREATPOSTERWALL, HAWKEUNO, HDBITS, HDSPACE, HDTORRENTS, HELLENICHD, HOMIEHELPDESK,
         #   IMMORTALSEED, INFINITYHD, IPTORRENTS, ITATORRENTS, LAJIDUI, LASTDIGITALUNDERGROUND, LATTEAM, LEMONHD, LOCADORA, LONGPT, LST,
         #   LUMINARR, MAKINGOFF, MIDNIGHTSCENE, MTEAM, NEBULANCE, NORDICQUALITY, NZBGEEK, NZBNEST, OLDTOONSWORLD, ONLYENCODES, ORPHEUS, PASSTHEPOPCORN,
         #   PEERGARDEN, POLISHTORRENT, PORTUGAS, PRIVATEHD, PTCAFE, PTERCLUB, PTFANS, PTGTK, PTSKIT, PTZONE, QINGWA, RACING4EVERYONE, RAILGUNPT,
         #   RASTASTUGAN, REELFLIX, RETROFLIX, RETROMOVIESCLUB, ROCKETHD, SAMARITANO, SEEDPOOL, SHAREISLAND, SKIPTHECOMMERCIALS, SPEEDAPP,
         #   SUIO, SWARMAZON, THELEACHZONE, THEOLDSCHOOL, TORRENTEROS, TORRENTHAVEN, TORRENTHR, TORRENTLEECH, TOTHEGLORY, TVCHAOSUK, ULCX, UTOPIA,
-        #   VULTU, XINGYUNGEPT, YUSCENE, ZENITH
+        #   VIETMEDIAF, VULTU, XINGYUNGEPT, YUSCENE, ZENITH
         # This list is validated against the tracker blocks below by the test suite.
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
+        "0DAYFILES": {
+            "cli_alias": "0DF",
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # "use_for_search": False, set to True if using this tracker for automatic ID searching or description parsing
+            "use_for_search": False,
+            "api_key": "",
+            "announce_url": "",
+            "anon": False,
+            # Trusted uploaders only: send uploads to the moderation queue for staff review
+            "modq": False,
+        },
         "1PTBA": {
             # Alias used to select this tracker with -tk/--trackers; case-insensitive.
             "cli_alias": "1PT",
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://1ptba.com/ to data/cookies/1PTBA.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -741,7 +768,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://avistaz.to to data/cookies/AVISTAZ.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # If True, the script performs a basic rules compliance check (e.g., codecs, region).
@@ -852,7 +879,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://bj-share.info to data/cookies/BJSHARE.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             # Two-factor authentication (2FA) must be enabled in your profile settings; otherwise, your session cookies will expire fairly quickly.
             "announce_url": "",
             "anon": True,
@@ -929,7 +956,7 @@ config: dict[str, Any] = {
             "cli_alias": "BT",
             "link_dir_name": "",
             # Cookies required (export from https://brasiltracker.org/ to data/cookies/BRASILTRACKER.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # Set this to True if you want to allow external subtitles to be included in the upload
@@ -1015,7 +1042,7 @@ config: dict[str, Any] = {
         "CATHODERAYTUBE": {
             "cli_alias": "CRT",
             # Cookies required (export from https://www.cathode-ray.tube/ to data/cookies/CATHODERAYTUBE.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
         },
@@ -1065,7 +1092,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://cinemaz.to to data/cookies/CINEMAZ.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # If True, the script performs a basic rules compliance check (e.g., codecs, region).
@@ -1372,7 +1399,7 @@ config: dict[str, Any] = {
             # You can find your API key in Profile Settings -> Access Settings -> API Key. If there is no API, click "Reset your api key" and Save Profile.
             "api_key": "",
             # Optionally, export cookies from https://greatposterwall.com to data/cookies/GREATPOSTERWALL.txt to improve duplicate searches.
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             # You can find your announce URL at https://greatposterwall.com/upload.php
             "announce_url": "",
             # Upload with Exclusive flag
@@ -1449,7 +1476,7 @@ config: dict[str, Any] = {
             "use_for_search": False,
             # for HDBITS you **MUST** have been granted uploading approval via Offers, you've been warned
             # Cookies required (export from https://hdbits.org/ to data/cookies/HDBITS.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "username": "",
             "passkey": "",
             "announce_url": "",
@@ -1461,7 +1488,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://hd-space.org/ to data/cookies/HDSPACE.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
@@ -1493,7 +1520,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export to data/cookies/HDTORRENTS.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             # You can change the URL if the main site is down or if you encounter upload issues.
             # Keep in mind that changing the URL requires exporting the cookies again from the new domain.
             # Alternative domains:
@@ -1527,6 +1554,19 @@ config: dict[str, Any] = {
             "bluray_image_size": "",
             "add_audio_spectrogram": True,
             "inject_delay": 0,
+        },
+        "HELLENICHD": {
+            "cli_alias": "HEL",
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # "use_for_search": False, set to True if using this tracker for automatic ID searching or description parsing
+            "use_for_search": False,
+            "api_key": "",
+            # You can find your announce URL at https://hellenic-hd.cc/torrents/create
+            "announce_url": "",
+            "anon": False,
+            # Send uploads to the moderation queue for staff review and approval
+            "modq": False,
         },
         "HOMIEHELPDESK": {
             "cli_alias": "HHD",
@@ -1570,7 +1610,7 @@ config: dict[str, Any] = {
         "IMMORTALSEED": {
             "cli_alias": "IS",
             # Cookies required (export from https://immortalseed.me/ to data/cookies/IMMORTALSEED.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "announce_url": "",
@@ -1646,7 +1686,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export to data/cookies/IPTORRENTS.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             # By default, IPTORRENTS removes all dots from the upload name, causing audio codecs to be named incorrectly, for example, "DTS 5 1" instead of "DTS 5.1".
             # It also does not have the option to set the IMDb during upload.
@@ -1724,7 +1764,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://pt.lajidui.top/ to data/cookies/LAJIDUI.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -1839,7 +1879,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://lemonhd.net/ to data/cookies/LEMONHD.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             # The configurations below override the DEFAULT configuration
             "add_logo": True,
@@ -1914,7 +1954,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://longpt.org/ to data/cookies/LONGPT.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -2031,7 +2071,7 @@ config: dict[str, Any] = {
         "MAKINGOFF": {
             "cli_alias": "MKO",
             # Cookies required (export from https://www.makingoff.org/ to data/cookies/MAKINGOFF.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # trackers to be added on the torrents
@@ -2424,7 +2464,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://privatehd.to/ to data/cookies/PRIVATEHD.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # If True, the script performs a basic rules compliance check (e.g., codecs, region).
@@ -2449,7 +2489,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://ptcafe.club/ to data/cookies/PTCAFE.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -2493,7 +2533,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://ptfans.cc/ to data/cookies/PTFANS.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -2524,7 +2564,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://pt.gtkpw.xyz to data/cookies/PTGTK.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -2555,7 +2595,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://www.ptskit.org to data/cookies/PTSKIT.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             # The configurations below override the DEFAULT configuration
             "add_logo": True,
@@ -2585,7 +2625,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://ptzone.xyz/ to data/cookies/PTZONE.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -2618,7 +2658,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://www.qingwapt.com/ to data/cookies/QINGWA.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -2693,7 +2733,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://bilibili.download to data/cookies/RAILGUNPT.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -3320,7 +3360,7 @@ config: dict[str, Any] = {
             "link_dir_name": "",
             # Set to False if you don't have access to the API (e.g., if you're a trial uploader). Note: this may not work sometimes due to Cloudflare restrictions.
             # If you are not going to use the API, you will need to export cookies from https://www.torrentleech.org/ to data/cookies/TORRENTLEECH.txt.
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "api_upload": True,
             # You can find your passkey at your profile (https://www.torrentleech.org/profile/[YourUserName]/view) -> Torrent Passkey
             "passkey": "",
@@ -3469,6 +3509,41 @@ config: dict[str, Any] = {
             "add_audio_spectrogram": True,
             "inject_delay": 0,
         },
+        "VIETMEDIAF": {
+            "cli_alias": "VMF",
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # "use_for_search": False, set to True if using this tracker for automatic ID searching or description parsing
+            "use_for_search": False,
+            "api_key": "",
+            "anon": False,
+            # Send uploads to VietMediaF modq for staff approval
+            "modq": False,
+            # The configurations below override the DEFAULT configuration
+            "add_logo": True,
+            "logo_size": "",
+            "thumbnail_size": "",
+            "screens_per_row": "",
+            "episode_overview": True,
+            "multiScreens": "",
+            "pack_thumb_size": "",
+            "charLimit": "",
+            "fileLimit": "",
+            "processLimit": "",
+            "custom_description_header": "",
+            "screenshot_header": "",
+            "disc_menu_header": "",
+            "mediainfo_header": "",
+            "audio_spectrogram_header": "",
+            "custom_signature": "",
+            "user_description": "",
+            "custom_header": "",
+            "custom_footer": "",
+            "use_bluray_images": True,
+            "bluray_image_size": "",
+            "add_audio_spectrogram": True,
+            "inject_delay": 0,
+        },
         "VULTU": {
             "cli_alias": "VLT",
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -3482,7 +3557,7 @@ config: dict[str, Any] = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # Cookies required (export from https://pt.xingyungept.org/ to data/cookies/XINGYUNGEPT.txt).
-            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # See: https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/example-config.md#how-to-export-cookies
             "announce_url": "",
             "anon": True,
             # The configurations below override the DEFAULT configuration
@@ -3606,7 +3681,7 @@ config: dict[str, Any] = {
         # Name your torrent clients here, for example, this example is named "qbittorrent" and is set as default_torrent_client above
         # All options relate to the webui, make sure you have the webui secured if it has WAN access
         # **DO NOT** modify torrent_client name, eg: "qbit"
-        # See https://github.com/wastaken7/Upload-Assistant/blob/development/docs/configuration.md#torrent-clients
+        # See https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/configuration.md#torrent-clients
         "qbittorrent": {
             "torrent_client": "qbit",
             # qui reverse proxy: https://getqui.com/docs/features/reverse-proxy

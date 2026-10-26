@@ -7,6 +7,7 @@ from typing import Any
 from src.app_paths import STATE_DIR
 
 _TRACKER_ID_ALIASES = {
+    "0DF": "0DAYFILES",
     "ANT": "ANTHELION",
     "BHD": "BEYONDHD",
     "BLU": "BLUTOPIA",
@@ -20,6 +21,7 @@ _TRACKER_ID_ALIASES = {
     "PTP": "PASSTHEPOPCORN",
     "RHD": "ROCKETHD",
     "FLD": "FLOOD",
+    "VMF": "VIETMEDIAF",
 }
 
 
@@ -283,6 +285,7 @@ class Meta:
     mal_manual: str | int | None = None
     mal: int | None = None
     manga: bool = False
+    manual_audio: str | None = None
     manual_category: str | None = None
     manual_commentary: bool = False
     manual_data: str | None = None

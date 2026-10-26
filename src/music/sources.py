@@ -55,7 +55,7 @@ class MusicBrainzEnricher:
     _lock: ClassVar[asyncio.Lock] = asyncio.Lock()
     _last_request: ClassVar[float] = 0.0
 
-    def __init__(self, user_agent: str = "Upload-Assistant/2.x (+https://github.com/wastaken7/Upload-Assistant)", base_dir: str = "") -> None:
+    def __init__(self, user_agent: str = "Upload-Assistant/2.x (+https://github.com/Skinamarink662244/wastaken-upload-assistant)", base_dir: str = "") -> None:
         self.user_agent = user_agent
         self.base_dir = base_dir
 
@@ -231,7 +231,7 @@ class DiscogsEnricher:
     _lock: ClassVar[asyncio.Lock] = asyncio.Lock()
     _last_request: ClassVar[float] = 0.0
 
-    def __init__(self, token: str = "", user_agent: str = "Upload-Assistant/2.x (+https://github.com/wastaken7/Upload-Assistant)", base_dir: str = "") -> None:
+    def __init__(self, token: str = "", user_agent: str = "Upload-Assistant/2.x (+https://github.com/Skinamarink662244/wastaken-upload-assistant)", base_dir: str = "") -> None:
         self.token = token.strip()
         self.user_agent = user_agent
         self.base_dir = base_dir

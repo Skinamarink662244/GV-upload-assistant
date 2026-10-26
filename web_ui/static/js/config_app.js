@@ -1339,6 +1339,7 @@ const trackerNameMap = {
   HDBITS: "HDBits",
   HDSPACE: "HD-Space",
   HDTORRENTS: "HD-Torrents",
+  HELLENICHD: "Hellenic-HD",
   HOMIEHELPDESK: "HomieHelpDesk",
   IMMORTALSEED: "ImmortalSeed",
   INFINITYHD: "InfinityHD",
@@ -1396,10 +1397,12 @@ const trackerNameMap = {
   ULCX: "ULCX",
   SUIO: "Suio",
   UTOPIA: "UTOPIA",
+  VIETMEDIAF: "VietMediaF",
   VULTU: "vultu",
   XINGYUNGEPT: "XingyungePT",
   YUSCENE: "YUSCENE",
   ZENITH: "Zenith",
+  "0DAYFILES": "0DayFiles",
   "1PTBA": "1PTBA",
 };
 

@@ -320,7 +320,7 @@ class Anthelion:
                 data.update({"flagchangereason": "User prompted to add tags manually"})
 
         headers = {
-            "User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/wastaken7/Upload-Assistant')} ({platform.system()} {platform.release()})"
+            "User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/Skinamarink662244/wastaken-upload-assistant')} ({platform.system()} {platform.release()})"
         }
 
         if not meta.debug:
@@ -473,7 +473,7 @@ class Anthelion:
 
         headers = {
             "X-API-Key": self.api_key,
-            "User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/wastaken7/Upload-Assistant')} ({platform.system()} {platform.release()})",
+            "User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/Skinamarink662244/wastaken-upload-assistant')} ({platform.system()} {platform.release()})",
         }
 
         async with httpx.AsyncClient(timeout=15.0) as client:

@@ -312,6 +312,7 @@ uv tool install --force git+https://github.com/Skinamarink662244/wastaken-upload
 
 |                                                                                               | Site                   | Usage                  | Supported Categories         |
 | --------------------------------------------------------------------------------------------- | ---------------------- | ---------------------- | ---------------------------- |
+| <img src="web_ui/static/img/trackers/0dayfiles.png" width="16" height="16" />                 | 0DayFiles              | 0DAYFILES              | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/1ptba.png" width="16" height="16" />                     | 1PTBA                  | 1PTBA                  | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/aither.png" width="16" height="16" />                    | Aither                 | AITHER                 | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/alpharatio.png" alt="" width="16" height="16" />         | AlphaRatio             | ALPHARATIO             | MOVIE, TV                    |
@@ -342,6 +343,7 @@ uv tool install --force git+https://github.com/Skinamarink662244/wastaken-upload
 | <img src="web_ui/static/img/trackers/hdbits.png" width="16" height="16" />                    | HDBits                 | HDBITS                 | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/hdspace.png" width="16" height="16" />                   | HD-Space               | HDSPACE                | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/hdtorrents.png" width="16" height="16" />                | HD-Torrents            | HDTORRENTS             | MOVIE, TV                    |
+| <img src="web_ui/static/img/trackers/hellenichd.png" width="16" height="16" />                | Hellenic-HD            | HELLENICHD             | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/homiehelpdesk.png" width="16" height="16" />             | HomieHelpDesk          | HOMIEHELPDESK          | MOVIE, TV, BOOK, GAME, MUSIC |
 | <img src="web_ui/static/img/trackers/immortalseed.png" width="16" height="16" />              | ImmortalSeed           | IMMORTALSEED           | MOVIE, TV, BOOK, MUSIC, GAME |
 | <img src="web_ui/static/img/trackers/infinityhd.png" width="16" height="16" />                | InfinityHD             | INFINITYHD             | MOVIE, TV                    |
@@ -385,7 +387,7 @@ uv tool install --force git+https://github.com/Skinamarink662244/wastaken-upload
 | <img src="web_ui/static/img/trackers/samaritano.png" width="16" height="16" />                | Samaritano             | SAMARITANO             | MOVIE, TV, BOOK, GAME        |
 | <img src="web_ui/static/img/trackers/seedpool.png" width="16" height="16" />                  | seedpool               | SEEDPOOL               | MOVIE, TV, BOOK, GAME, MUSIC |
 | <img src="web_ui/static/img/trackers/shareisland.png" width="16" height="16" />               | ShareIsland            | SHAREISLAND            | MOVIE, TV                    |
-| <img src="web_ui/static/img/trackers/skipthecommercials.png" alt="" width="16" height="16" /> | SkipTheCommerials      | SKIPTHECOMMERCIALS     | MOVIE (Documentary only), TV |
+| <img src="web_ui/static/img/trackers/skipthecommercials.png" alt="" width="16" height="16" /> | SkipTheCommercials     | SKIPTHECOMMERCIALS     | MOVIE (Documentary only), TV |
 | <img src="web_ui/static/img/trackers/speedapp.png" width="16" height="16" />                  | SpeedApp               | SPEEDAPP               | MOVIE, TV, BOOK, GAME, MUSIC |
 | <img src="web_ui/static/img/trackers/swarmazon.png" width="16" height="16" />                 | Swarmazon              | SWARMAZON              | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/theleachzone.png" width="16" height="16" />              | The Leach Zone         | THELEACHZONE           | MOVIE, TV                    |
@@ -399,6 +401,7 @@ uv tool install --force git+https://github.com/Skinamarink662244/wastaken-upload
 | <img src="web_ui/static/img/trackers/xingyungept.png" width="16" height="16" />               | XingyungePT            | XINGYUNGEPT            | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/ulcx.png" width="16" height="16" />                      | ULCX                   | ULCX                   | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/utopia.png" width="16" height="16" />                    | UTOPIA                 | UTOPIA                 | MOVIE, TV                    |
+| <img src="web_ui/static/img/trackers/vietmediaf.png" width="16" height="16" />                | VietMediaF             | VIETMEDIAF             | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/vultu.png" width="16" height="16" />                     | vultu                  | VULTU                  | MOVIE, TV, GAME              |
 | <img src="web_ui/static/img/trackers/yuscene.png" width="16" height="16" />                   | YUSCENE                | YUSCENE                | MOVIE, TV, BOOK, GAME, MUSIC |
 | <img src="web_ui/static/img/trackers/zenith.png" width="16" height="16" />                    | Zenith                 | ZENITH                 | MOVIE, TV, BOOK, GAME, MUSIC |
@@ -414,6 +417,7 @@ uv tool install --force git+https://github.com/Skinamarink662244/wastaken-upload
 | <img src="web_ui/static/img/trackers/drunkenslug.png" width="16" height="16" /> | DrunkenSlug | DRUNKENSLUG | MOVIE, TV, BOOK, GAME        |
 | <img src="web_ui/static/img/trackers/nzbgeek.png" width="16" height="16" />     | NZBGeek     | NZBGEEK     | MOVIE, TV, BOOK, GAME, MUSIC |
 | <img src="web_ui/static/img/trackers/nzbnest.png" width="16" height="16" />     | NzbNest     | NZBNEST     | MOVIE, TV, BOOK, GAME, MUSIC |
+|                                                                                 | Suio        | SUIO        | MOVIE, TV, BOOK, GAME, XXX   |
 
 </details>
 
@@ -498,6 +502,11 @@ Features automated binary managers for:
 - [par2cmdline-turbo](https://github.com/animetosho/par2cmdline-turbo)
 - [pesto](https://github.com/franzopl/pesto)
 - [7-Zip](https://www.7-zip.org/)
+
+Tracker work ported from other forks:
+
+- VietMediaF support from [bioidaika/Upload-Assistant](https://github.com/bioidaika/Upload-Assistant)
+- SkipTheCommercials rules (banned groups, English requirement, naming) from [shawnlocal/Upload-Assistant](https://github.com/shawnlocal/Upload-Assistant)
 
 <p>
   <a href="https://github.com/autobrr/mkbrr"><img src="https://github.com/autobrr/mkbrr/blob/main/.github/assets/mkbrr-dark.png?raw=true" alt="mkbrr" height="40px;"></a>&nbsp;&nbsp;

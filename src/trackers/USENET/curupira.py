@@ -480,7 +480,7 @@ class Curupira:
                     files=files,
                     data=data,
                     params=params,
-                    headers={"User-Agent": f"Upload-Assistant {(meta.current_version if meta.current_version is not None else 'github.com/wastaken7/Upload-Assistant')}"},
+                    headers={"User-Agent": f"Upload-Assistant {(meta.current_version if meta.current_version is not None else 'github.com/Skinamarink662244/wastaken-upload-assistant')}"},
                 )
 
             if response.status_code not in (200, 201):

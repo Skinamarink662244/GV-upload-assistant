@@ -2607,7 +2607,7 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
             return (index, image_path)
         stderr_text = (stderr or b"").decode("utf-8", errors="replace")
         if "Error initializing complex filters" in stderr_text:
-            logger.info("[red]FFmpeg complex filters error: see https://github.com/wastaken7/Upload-Assistant/blob/development/docs/ffmpeg-max-workers-issues.md[/red]")
+            logger.info("[red]FFmpeg complex filters error: see https://github.com/Skinamarink662244/wastaken-upload-assistant/blob/development/docs/ffmpeg-max-workers-issues.md[/red]")
         else:
             logger.info(f"[red]FFmpeg error capturing screenshot: {stderr_text}[/red]")
         return (index, None)

@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import aiofiles
-import cli_ui
 import httpx
 from rich.markup import escape
 
@@ -157,7 +156,7 @@ class BEYONDHD:
         if len(tags) > 0:
             data["tags"] = ",".join(tags)
         headers = {
-            "User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/wastaken7/Upload-Assistant')} ({platform.system()} {platform.release()})"
+            "User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/Skinamarink662244/wastaken-upload-assistant')} ({platform.system()} {platform.release()})"
         }
 
         url = self.upload_url + str(self.tracker_config.get("api_key", "")).strip()
@@ -354,11 +353,12 @@ class BEYONDHD:
                     else:
                         await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url] ")
                 await desc.write("[/align]")
-            await desc.write(f"\n[align=right][url=https://github.com/wastaken7/Upload-Assistant][size=10]{meta.ua_signature}[/size][/url][/align]")
+            await desc.write(f"\n[align=right][url=https://github.com/Skinamarink662244/wastaken-upload-assistant][size=10]{meta.ua_signature}[/size][/url][/align]")
             await desc.close()
             return
 
     async def get_additional_checks(self, meta: Meta) -> bool:
+        passed = True
         bhd_name = await self.get_name(meta)
         if any(
             phrase in bhd_name.lower()
@@ -381,8 +381,9 @@ class BEYONDHD:
                 "-irobot",
                 "-beyondhd",
             )
-        ) and not self._confirm_or_skip(meta, f"This is an internal {self.tracker} release"):
-            return False
+        ):
+            logger.info(f"{self.tracker}: [bold red]This is an internal {self.tracker} release, skipping upload[/bold red]")
+            passed = False
 
         if not meta.valid_mi_settings:
             logger.info(f"{self.tracker}: [bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
@@ -417,11 +418,12 @@ class BEYONDHD:
             ("lfi", meta.type == "WEBDL", "LFi WEB-DLs are banned"),
         )
         for group, applies, reason in conditional_bans:
-            if tag == group and applies and not self._confirm_or_skip(meta, f"{reason} at {self.tracker}"):
-                return False
+            if tag == group and applies:
+                logger.info(f"{self.tracker}: [bold red]{escape(reason)} at {self.tracker}[/bold red]")
+                passed = False
 
         lossless_main_audio = any(codec in str(meta.audio) for codec in ("TrueHD", "DTS-HD MA"))
-        rule_prompts = (
+        rule_violations = (
             (
                 meta.type == "REMUX" and lossless_main_audio and str(meta.channels) in ("1.0", "2.0"),
                 "Lossless mono/stereo audio in remuxes must be encoded to FLAC",
@@ -436,12 +438,13 @@ class BEYONDHD:
             ),
             (meta.sd == 1, "SD is only allowed if there is no retail HD/UHD source available"),
         )
-        for violated, message in rule_prompts:
-            if violated and not self._confirm_or_skip(meta, message):
-                return False
+        for violated, message in rule_violations:
+            if violated:
+                logger.info(f"{self.tracker}: [bold red]{escape(message)}[/bold red]")
+                passed = False
 
         common = Common(config=self.config)
-        return common.check_and_confirm_adult_media_upload(meta, self.tracker)
+        return common.check_and_confirm_adult_media_upload(meta, self.tracker) and passed
 
     async def search_existing(self, meta: Meta) -> list[dict[str, Any]]:
         dupes: list[dict[str, Any]] = []
@@ -495,12 +498,6 @@ class BEYONDHD:
                 dupes.append(result)
 
         return dupes
-
-    def _confirm_or_skip(self, meta: Meta, message: str) -> bool:
-        logger.info(f"{self.tracker}: [bold red]{escape(message)}[/bold red]")
-        if not meta.unattended or (meta.unattended and meta.unattended_confirm):
-            return bool(cli_ui.ask_yes_no("Do you want to upload anyway?", default=False))
-        return False
 
     def _is_true(self, value: Any) -> bool:
         """

@@ -313,7 +313,7 @@ class GreatPosterWall:
             logo=False,
             mediainfo=False,
             tv_info=False,
-            signature=f"[align=right][url=https://github.com/wastaken7/Upload-Assistant][size=1]{meta.ua_signature}[/size][/url][/align]",
+            signature=f"[align=right][url=https://github.com/Skinamarink662244/wastaken-upload-assistant][size=1]{meta.ua_signature}[/size][/url][/align]",
         )
 
     def get_trailer(self, meta: Meta) -> str:
@@ -419,7 +419,7 @@ class GreatPosterWall:
         async with httpx.AsyncClient(
             cookies=cookies,
             timeout=30,
-            headers={"User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/wastaken7/Upload-Assistant')}"},
+            headers={"User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/Skinamarink662244/wastaken-upload-assistant')}"},
         ) as client:
             response = await client.get(search_url)
             response.raise_for_status()
@@ -940,7 +940,7 @@ class GreatPosterWall:
                 async with httpx.AsyncClient(
                     timeout=15,
                     cookies=request_cookies,
-                    headers={"User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/wastaken7/Upload-Assistant')}"},
+                    headers={"User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/Skinamarink662244/wastaken-upload-assistant')}"},
                 ) as client:
                     if method == "post":
                         response = await client.post(url, data=params)

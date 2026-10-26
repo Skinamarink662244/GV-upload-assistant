@@ -269,7 +269,7 @@ class AlphaRatio:
 
         logger.debug(f"{self.tracker}: [blue]{search_url}")
 
-        headers = {"User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/wastaken7/Upload-Assistant')}"}
+        headers = {"User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/Skinamarink662244/wastaken-upload-assistant')}"}
 
         async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=cookie_jar) as client:
             response = await client.get(search_url)
@@ -316,7 +316,7 @@ class AlphaRatio:
         if not cookie_jar:
             return None
 
-        headers = {"User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/wastaken7/Upload-Assistant')}"}
+        headers = {"User-Agent": f"{meta.ua_name} {(meta.current_version if meta.current_version is not None else 'github.com/Skinamarink662244/wastaken-upload-assistant')}"}
 
         try:
             async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=cookie_jar) as client:

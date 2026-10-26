@@ -4,6 +4,7 @@ import importlib
 import json
 import re
 import sys
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -17,7 +18,7 @@ from data.example_config import config as example_config
 from src import webui_events
 from src.api_key_expiry import observe_tracker_response, warn_api_key_expiry
 from src.cleanup import cleanup_manager
-from src.console import logger
+from src.console import logger, prompt_in_thread
 from src.meta import Meta
 from src.trackers.common import Common
 
@@ -65,6 +66,7 @@ class LazyTrackerDict(dict):
 
 # Static auth types to prevent loading all trackers at startup
 STATIC_AUTH_TYPES = {
+    "0DAYFILES": "unit3d_api",
     "1PTBA": "cookies",
     "AITHER": "unit3d_api",
     "ALPHARATIO": "cookies",
@@ -94,6 +96,7 @@ STATIC_AUTH_TYPES = {
     "FUNFILE": "cookies",
     "GREATPOSTERWALL": "other_api",
     "HAWKEUNO": "unit3d_api",
+    "HELLENICHD": "unit3d_api",
     "HDBITS": "cookies",
     "HDSPACE": "cookies",
     "HDTORRENTS": "cookies",
@@ -156,6 +159,7 @@ STATIC_AUTH_TYPES = {
     "TORRENTHAVEN": "unit3d_api",
     "ULCX": "unit3d_api",
     "UTOPIA": "unit3d_api",
+    "VIETMEDIAF": "unit3d_api",
     "VULTU": "other_api",
     "XINGYUNGEPT": "cookies",
     "YUSCENE": "unit3d_api",
@@ -482,7 +486,42 @@ class TrackerSetup:
         with Path(file_path).open(encoding="utf-8") as file:
             return file.read()
 
-    async def check_banned_group(self, tracker: str, banned_group_list: list[Any], meta: Meta) -> bool:
+    async def _type_scoped_banned_groups(self, tracker: str, raw_data: list[Any], meta: Meta) -> list[Any]:
+        """Banned groups for this upload's type, from an API that scopes bans by release type.
+
+        An entry with `all_types: false` bans the group only for the tracker type IDs in
+        `type_ids`. When the upload's type or the entry's types can't be resolved, the ban applies.
+        Each group comes back as `[name, note]` so the reason is shown with the match.
+        """
+        type_id: int | None = None
+        tracker_instance = self._create_tracker_instance(tracker)
+        get_type_id = getattr(tracker_instance, "get_type_id", None)
+        if callable(get_type_id):
+            try:
+                resolved = cast(dict[str, str], await get_type_id(meta))
+                type_id = int(resolved.get("type_id", "0")) or None
+            except (TypeError, ValueError, AttributeError) as e:
+                logger.debug(f"Could not resolve the {tracker} type ID for banned groups: {e}")
+
+        groups: list[Any] = []
+        for entry in raw_data:
+            if not isinstance(entry, dict) or "name" not in entry:
+                continue
+            item = cast(JsonDict, entry)
+            types = [str(t) for t in cast(list[Any], item.get("types") or [])]
+            type_ids = {int(t) for t in cast(list[Any], item.get("type_ids") or []) if str(t).isdigit()}
+            scoped = item.get("all_types") is False
+            if scoped and type_id is not None and type_ids and type_id not in type_ids:
+                continue
+
+            notes = [str(item["reason"])] if item.get("reason") else []
+            if scoped and types:
+                notes.append(f"Banned types: {', '.join(types)}.")
+            groups.append([str(item["name"]), " ".join(notes)] if notes else str(item["name"]))
+
+        return groups
+
+    async def check_banned_group(self, tracker: str, banned_group_list: list[Any], meta: Meta, prompt_yes_no: Callable[..., Awaitable[bool]] | None = None) -> bool:
         result = False
         tag = (meta.tag or "").lstrip("-")
         if not tag:
@@ -518,23 +557,24 @@ class TrackerSetup:
                 logger.info(f"[bold red]No banned groups found for '{tracker}'.")
                 return False
             if not file_path:
-                logger.info(f"[bold red]Failed to load banned groups for '{tracker}'.")
-                return False
+                # API unreachable: fall back to the tracker's bundled banned_groups list.
+                logger.info(f"[bold red]Failed to load banned groups for '{tracker}'; using bundled list.")
+            else:
+                # Load the banned groups from the file
+                try:
+                    content = await asyncio.to_thread(self._read_file, file_path)
+                    data = json.loads(content)
+                    raw_data = data.get("raw_data")
+                    banned_groups = data.get("banned_groups", "")
+                    if isinstance(raw_data, list) and any(isinstance(item, dict) and "all_types" in item for item in cast(list[Any], raw_data)):
+                        banned_group_list = await self._type_scoped_banned_groups(tracker, cast(list[Any], raw_data), meta)
+                    elif banned_groups:
+                        banned_group_list = banned_groups.split(", ")
 
-            # Load the banned groups from the file
-            try:
-                content = await asyncio.to_thread(self._read_file, file_path)
-                data = json.loads(content)
-                banned_groups = data.get("banned_groups", "")
-                if banned_groups:
-                    banned_group_list = banned_groups.split(", ")
-
-            except FileNotFoundError:
-                logger.info(f"[bold red]Banned group file for '{tracker}' not found.")
-                return False
-            except json.JSONDecodeError:
-                logger.info(f"[bold red]Failed to parse banned group file for '{tracker}'.")
-                return False
+                except FileNotFoundError:
+                    logger.info(f"[bold red]Banned group file for '{tracker}' not found; using bundled list.")
+                except json.JSONDecodeError:
+                    logger.info(f"[bold red]Failed to parse banned group file for '{tracker}'; using bundled list.")
 
         for tag in banned_group_list:
             if isinstance(tag, list):
@@ -555,8 +595,14 @@ class TrackerSetup:
 
         if result:
             if not meta.unattended or meta.unattended_confirm:
+                # Trackers are checked concurrently: ask through the caller's shared prompt lock.
+                question = f"{tracker}: {meta.tag[1:]} is a banned group. Do you want to continue anyway?"
                 try:
-                    if cli_ui.ask_yes_no(cli_ui.red, "Do you want to continue anyway?", default=False):
+                    if prompt_yes_no is not None:
+                        proceed = await prompt_yes_no(question, default=False)
+                    else:
+                        proceed = await prompt_in_thread(cli_ui.ask_yes_no, question, default=False)
+                    if proceed:
                         return False
                 except EOFError:
                     logger.info("\n[red]Exiting on user request (Ctrl+C)[/red]")
@@ -1492,6 +1538,7 @@ class TrackerSetup:
 
 tracker_class_map: Any = LazyTrackerDict(
     {
+        "0DAYFILES": ("src.trackers.UNIT3D.zerodayfiles", "ZeroDayFiles"),
         "1PTBA": ("src.trackers.NEXUSPHP.oneptba", "OnePTBA"),
         "AITHER": ("src.trackers.UNIT3D.aither", "Aither"),
         "ALPHARATIO": ("src.trackers.GAZELLE.alpharatio", "AlphaRatio"),
@@ -1521,6 +1568,7 @@ tracker_class_map: Any = LazyTrackerDict(
         "FUNFILE": ("src.trackers.funfile", "FunFile"),
         "GREATPOSTERWALL": ("src.trackers.GAZELLE.greatposterwall", "GreatPosterWall"),
         "HAWKEUNO": ("src.trackers.UNIT3D.hawkeuno", "HawkeUno"),
+        "HELLENICHD": ("src.trackers.UNIT3D.hellenichd", "HellenicHD"),
         "HDBITS": ("src.trackers.hdbits", "HDBits"),
         "HDSPACE": ("src.trackers.hdspace", "HDSpace"),
         "HDTORRENTS": ("src.trackers.hdtorrents", "HDTorrents"),
@@ -1584,6 +1632,7 @@ tracker_class_map: Any = LazyTrackerDict(
         "TORRENTHAVEN": ("src.trackers.UNIT3D.torrenthaven", "TorrentHaven"),
         "ULCX": ("src.trackers.UNIT3D.ulcx", "ULCX"),
         "UTOPIA": ("src.trackers.UNIT3D.utopia", "Utopia"),
+        "VIETMEDIAF": ("src.trackers.UNIT3D.vietmediaf", "VietMediaF"),
         "VULTU": ("src.trackers.vultu", "Vultu"),
         "XINGYUNGEPT": ("src.trackers.NEXUSPHP.xingyungept", "XingyungePT"),
         "YUSCENE": ("src.trackers.UNIT3D.yuscene", "YUSCENE"),

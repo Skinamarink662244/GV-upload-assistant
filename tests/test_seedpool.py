@@ -83,17 +83,28 @@ def test_seedpool_scene_without_confirmed_name_uses_original_filename():
     assert asyncio.run(_tracker().get_name(meta)) == {"name": release_name}
 
 
-@pytest.mark.parametrize("overrides", [{"is_disc": "BDMV"}, {"mal_id": 123}])
-def test_seedpool_retains_generated_names_for_discs_and_anime(overrides):
+def test_seedpool_retains_generated_names_for_discs():
     meta = Meta(
         category="MOVIE",
         name="Movie 2025 1080p BluRay DDP 5.1-GROUP",
         basename_no_ext="Containing folder",
         filelist=["D:/Movies/movie.mkv"],
-        **overrides,
+        is_disc="BDMV",
     )
 
     assert asyncio.run(_tracker().get_name(meta)) == {"name": "Movie.2025.1080p.BluRay.DDP.5.1-GROUP"}
+
+
+def test_seedpool_uses_the_filename_for_anime():
+    meta = Meta(
+        category="TV",
+        name="Show S01E01 1080p WEB-DL AAC 2.0 H.264-GROUP",
+        basename_no_ext="Containing folder",
+        filelist=["D:/Anime/[Group] Show - 01 (1080p).mkv"],
+        mal_id=123,
+    )
+
+    assert asyncio.run(_tracker().get_name(meta)) == {"name": "[Group] Show - 01 (1080p)"}
 
 
 def test_seedpool_rejects_music_without_cover(tmp_path):
