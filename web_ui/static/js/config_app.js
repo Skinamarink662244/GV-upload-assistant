@@ -122,7 +122,7 @@ const CONFIG_HELP_SECTION_HEADINGS = {
 const DESCRIPTION_HELP_OVERRIDES = {
   add_logo: "Add a TMDb show or movie logo to the top of the description.",
   hide_screenshot_header_if_only_section:
-    "Hide the screenshot header when screenshots are the only section in the description.",
+    "Hide a lone image-section header (screenshots, disc menus, spectrograms or HDR plots). Logos, text and signatures do not count. Tone-mapping notices are preserved.",
 };
 
 const getConfigHelpText = (item, pathParts) => {
@@ -293,10 +293,8 @@ const APP_BASE = API_BASE.replace(/\/api$/, "");
 const THEME_KEY = "ua_config_theme";
 const storage = window.UAStorage;
 const getStoredTheme = window.getUAStoredTheme;
-const colorThemes = window.UAThemes || [];
 const getStoredColorTheme = window.getUAStoredColorTheme;
 const setColorTheme = window.setUAColorTheme;
-const interfaceStyles = window.UAInterfaceStyles || [];
 const getStoredInterfaceStyle = window.getUAStoredInterfaceStyle;
 const setInterfaceStyle = window.setUAInterfaceStyle;
 
@@ -472,58 +470,15 @@ function ConfigApplicationRail({
           {isAppearanceOpen && (
             <div className="ua-app-rail-popover absolute bottom-0 left-full z-[60] ml-2 w-64 rounded-xl border p-4 shadow-2xl">
               <h2 className="text-sm font-semibold">Appearance</h2>
-              <label className="ua-app-rail-popover-label mt-3 block text-xs font-semibold">
-                Color theme
-              </label>
-              <select
-                aria-label="Color theme"
-                value={colorTheme}
-                onChange={(event) => {
-                  onColorThemeChange(event);
-                  setIsAppearanceOpen(false);
-                }}
-                className="ua-theme-picker mt-1 w-full rounded-lg px-3 py-2 text-sm"
-              >
-                {colorThemes.map((theme) => (
-                  <option key={theme.id} value={theme.id}>
-                    {theme.label}
-                  </option>
-                ))}
-              </select>
-              <label className="ua-app-rail-popover-label mt-3 block text-xs font-semibold">
-                Corner style
-              </label>
-              <select
-                aria-label="Corner style"
-                value={interfaceStyle}
-                onChange={(event) => {
-                  onInterfaceStyleChange(event);
-                  setIsAppearanceOpen(false);
-                }}
-                className="ua-theme-picker mt-1 w-full rounded-lg px-3 py-2 text-sm"
-              >
-                {interfaceStyles.map((style) => (
-                  <option key={style.id} value={style.id}>
-                    {style.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="ua-config-mode-button mt-3 flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm"
-                onClick={onToggleMode}
-                aria-pressed={isDarkMode}
-                aria-label={`Switch to ${isDarkMode ? "light" : "dark"} mode`}
-              >
-                <span>{isDarkMode ? "Dark mode" : "Light mode"}</span>
-                <span
-                  className="ua-config-mode-switch relative inline-flex h-6 w-11 items-center rounded-full"
-                  data-enabled={isDarkMode ? "true" : "false"}
-                  aria-hidden="true"
-                >
-                  <span className="ua-config-mode-knob inline-block h-4 w-4 rounded-full bg-white transition-transform"></span>
-                </span>
-              </button>
+              <window.UAAppearanceControls
+                colorTheme={colorTheme}
+                onColorThemeChange={onColorThemeChange}
+                interfaceStyle={interfaceStyle}
+                onInterfaceStyleChange={onInterfaceStyleChange}
+                isDarkMode={isDarkMode}
+                onToggleMode={onToggleMode}
+                labelClassName="ua-app-rail-popover-label"
+              />
             </div>
           )}
         </div>
@@ -544,7 +499,12 @@ const DEFAULT_WORKFLOW_GROUPS = [
   {
     id: "general",
     label: "General",
-    headings: ["MAIN SETTINGS", "LOGGING", "EXTERNAL TOOL PATHS"],
+    headings: [
+      "MAIN SETTINGS",
+      "WEBUI SETTINGS",
+      "LOGGING",
+      "EXTERNAL TOOL PATHS",
+    ],
   },
   {
     id: "metadata",
@@ -715,6 +675,7 @@ const METADATA_CACHE_SERVICE_GROUPS = [
 
 const CONFIG_HEADING_LABELS = {
   "MAIN SETTINGS": "Main Settings",
+  "WEBUI SETTINGS": "WebUI Settings",
   LOGGING: "Logging",
   "METADATA API CREDENTIALS": "Metadata API Credentials",
   "ARR INTEGRATION": "ARR Integration",
@@ -749,6 +710,8 @@ const CONFIG_HEADING_LABELS = {
 };
 
 const CONFIG_HEADING_DESCRIPTIONS = {
+  "WEBUI SETTINGS":
+    "Control uploads when their browser disconnects. Saved changes apply to newly started uploads. Set the prompt timeout to 0 to wait indefinitely.",
   "EXTERNAL TOOL PATHS":
     "Optional executable overrides. Leave fields blank to use automatically managed tools or executables on the system PATH. Check Tools detects their availability without downloading or installing anything.",
   "PROWLARR CREDENTIAL FALLBACK":
@@ -759,7 +722,6 @@ const EXTERNAL_TOOL_KEYS = [
   "ffmpeg_path",
   "ffprobe_path",
   "mediainfo_path",
-  "dvd_mediainfo_path",
   "bdinfo_path",
   "mkbrr_path",
   "dovi_tool_path",
@@ -978,6 +940,8 @@ const SCREENSHOT_OVERLAY_CHOICES = {
   ],
 };
 const DISPLAY_LABEL_OVERRIDES = {
+  webui_keep_uploads_on_disconnect: "Keep Uploads on Disconnect",
+  webui_unattended_prompt_timeout: "Unattended Prompt Timeout (minutes)",
   frame_overlay: "Enable Frame Overlay",
   overlay_position: "Alignment",
   overlay_layout: "Layout",
@@ -986,7 +950,7 @@ const DISPLAY_LABEL_OVERRIDES = {
   overlay_timestamp: "Timestamp",
   overlay_tonemapped: "Tonemapped Label",
   tag_overrides: "Release Group Overrides",
-  hide_screenshot_header_if_only_section: "Hide Standalone Screenshot Header",
+  hide_screenshot_header_if_only_section: "Hide Standalone Image Header",
   multiScreens: "Multiple Screenshots",
   charLimit: "Character Limit",
   fileLimit: "File Limit",
@@ -1002,6 +966,7 @@ const DISPLAY_LABEL_OVERRIDES = {
   ptscreens_api: "PTScreens API Key",
   seedpool_cdn_api: "Seedpool CDN API Key",
   sharex_api_key: "ShareX API Key",
+  thrimg_api: "THRImg API Key",
   utppm_api: "UTPPM API Key",
   zipline_api_key: "Zipline API Key",
   ggn_api_key: "GazelleGames API Key",
@@ -1009,7 +974,6 @@ const DISPLAY_LABEL_OVERRIDES = {
   ffmpeg_path: "FFmpeg",
   ffprobe_path: "FFprobe",
   mediainfo_path: "MediaInfo",
-  dvd_mediainfo_path: "DVD MediaInfo",
   bdinfo_path: "BDInfo",
   mkbrr_path: "mkbrr",
   dovi_tool_path: "Dolby Vision Tool",
@@ -1268,6 +1232,7 @@ const imageHostApiKeys = {
   midnightscene: ["midnightscene_api_key"],
   seedpool_cdn: ["seedpool_cdn_api"],
   sharex: ["sharex_url", "sharex_api_key"],
+  thrimg: ["thrimg_api"],
   utppm: ["utppm_api"],
 };
 
@@ -1297,6 +1262,7 @@ const IMAGE_HOST_LABELS = {
   ptscreens: "PTScreens",
   seedpool_cdn: "Seedpool CDN",
   sharex: "ShareX",
+  thrimg: "THRImg",
   utppm: "UTPPM",
   zipline: "Zipline",
 };
@@ -1424,11 +1390,13 @@ const trackerNameMap = {
   TOTHEGLORY: "ToTheGlory",
   TORRENTHR: "TorrentHR",
   TORRENTEROS: "Torrenteros",
+  TORRENTHAVEN: "TorrentHaven",
   TORRENTLEECH: "TorrentLeech",
   TVCHAOSUK: "TV Chaos UK",
   ULCX: "ULCX",
   SUIO: "Suio",
   UTOPIA: "UTOPIA",
+  VULTU: "vultu",
   XINGYUNGEPT: "XingyungePT",
   YUSCENE: "YUSCENE",
   ZENITH: "Zenith",
@@ -1515,6 +1483,7 @@ const NumberInput = ({
   min = 0,
   max = 100,
   step = 1,
+  rejectOutOfRange = false,
   className = "",
   isDarkMode = false,
 }) => {
@@ -1542,7 +1511,11 @@ const NumberInput = ({
       return;
     }
     const numValue = Number(draftValue);
-    if (draftValue.trim() === "" || !Number.isFinite(numValue)) {
+    if (
+      draftValue.trim() === "" ||
+      !Number.isFinite(numValue) ||
+      (rejectOutOfRange && (numValue < min || numValue > max))
+    ) {
       setDraftValue(String(normalizedValue));
       return;
     }
@@ -2579,6 +2552,7 @@ function ConfigLeafEditor({
       "rehash_cooldown",
       "custom_layout",
       "screens_per_row",
+      "webui_unattended_prompt_timeout",
     ];
     return numericFields.includes(key);
   };
@@ -2615,6 +2589,8 @@ function ConfigLeafEditor({
   // Hooks for numeric values
   const getDefaultValue = (key) => {
     switch (key) {
+      case "webui_unattended_prompt_timeout":
+        return 60;
       case "mkbrr_threads":
       case "rehash_cooldown":
         return 0;
@@ -2938,6 +2914,13 @@ function ConfigLeafEditor({
     // Define min/max for different fields
     const getFieldLimits = (key) => {
       switch (key) {
+        case "webui_unattended_prompt_timeout":
+          return {
+            min: 0,
+            max: Number.MAX_SAFE_INTEGER,
+            step: "any",
+            rejectOutOfRange: true,
+          };
         case "tracker_pass_checks":
           return { min: 1, max: 20, step: 1 };
         case "mkbrr_threads":
@@ -3032,6 +3015,7 @@ function ConfigLeafEditor({
             min={limits.min}
             max={limits.max}
             step={limits.step}
+            rejectOutOfRange={limits.rejectOutOfRange}
             isDarkMode={isDarkMode}
           />
         </div>
@@ -9953,59 +9937,15 @@ function ConfigSidebar({
 
         {isAppearanceOpen && (
           <div id="config-appearance-controls" className="mt-3">
-            <label
-              htmlFor="config-color-theme"
-              className="ua-config-service-description block text-xs font-semibold"
-            >
-              Color theme
-            </label>
-            <select
-              id="config-color-theme"
-              value={colorTheme}
-              onChange={onColorThemeChange}
-              aria-label="Color theme"
-              className="ua-theme-picker mt-1 w-full rounded-lg px-3 py-2 text-sm"
-            >
-              {colorThemes.map((theme) => (
-                <option key={theme.id} value={theme.id}>
-                  {theme.label}
-                </option>
-              ))}
-            </select>
-            <label
-              htmlFor="config-interface-style"
-              className="ua-config-service-description mt-3 block text-xs font-semibold"
-            >
-              Corner style
-            </label>
-            <select
-              id="config-interface-style"
-              value={interfaceStyle}
-              onChange={onInterfaceStyleChange}
-              aria-label="Corner style"
-              className="ua-theme-picker mt-1 w-full rounded-lg px-3 py-2 text-sm"
-            >
-              {interfaceStyles.map((style) => (
-                <option key={style.id} value={style.id}>
-                  {style.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="ua-config-mode-button mt-2 flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm"
-              onClick={onToggleMode}
-              aria-label={`Switch to ${isDarkMode ? "light" : "dark"} mode`}
-            >
-              <span>{isDarkMode ? "Dark mode" : "Light mode"}</span>
-              <span
-                className="ua-config-mode-switch relative inline-flex h-6 w-11 items-center rounded-full"
-                data-enabled={isDarkMode ? "true" : "false"}
-                aria-hidden="true"
-              >
-                <span className="ua-config-mode-knob inline-block h-4 w-4 rounded-full bg-white transition-transform"></span>
-              </span>
-            </button>
+            <window.UAAppearanceControls
+              colorTheme={colorTheme}
+              onColorThemeChange={onColorThemeChange}
+              interfaceStyle={interfaceStyle}
+              onInterfaceStyleChange={onInterfaceStyleChange}
+              isDarkMode={isDarkMode}
+              onToggleMode={onToggleMode}
+              labelClassName="ua-config-service-description"
+            />
           </div>
         )}
 
@@ -10278,11 +10218,11 @@ function ConfigApp() {
     };
   }, [isPendingSummaryOpen]);
 
-  const handleColorThemeChange = (event) => {
-    setColorThemeState(setColorTheme(event.target.value));
+  const handleColorThemeChange = (themeId) => {
+    setColorThemeState(setColorTheme(themeId));
   };
-  const handleInterfaceStyleChange = (event) => {
-    setInterfaceStyleState(setInterfaceStyle(event.target.value));
+  const handleInterfaceStyleChange = (styleId) => {
+    setInterfaceStyleState(setInterfaceStyle(styleId));
   };
   const getSubTabsForSection = (section) => {
     if (section?.section === "DEFAULT") {

@@ -21,6 +21,7 @@ from rich.progress import BarColumn, TaskID, TaskProgressColumn, TextColumn
 
 from src.console import console, logger, progress_display
 from src.meta import Meta
+from src.resource_coordinator import resource_slot
 from src.stats import record_event_async
 from src.webui_progress import complete_progress, has_progress_callback, publish_progress
 
@@ -342,22 +343,38 @@ async def check_binary(binary_name: str, config_path: str | None = None, meta: M
     raise FileNotFoundError(f"Binary '{path}' not found in PATH or config. Please install it.")
 
 
-async def run_command_with_logging(cmd: list[str], description: str) -> None:
-    """Execute a shell command asynchronously and log its output in debug mode."""
-    # Redact sensitive info (like password/username) in the printed command
+_DEFAULT_SENSITIVE_OPTIONS = frozenset({"-p", "-u", "--password", "--username"})
+
+
+def _redact_command(cmd: list[str], sensitive_options: set[str] | frozenset[str] = _DEFAULT_SENSITIVE_OPTIONS) -> str:
+    """Render a command for logs without credentials or archive passwords.
+
+    Handles separate values (``-p secret``), ``--option=secret`` and the
+    attached 7z/RAR password form (``-psecret``).
+    """
     redacted_cmd = []
     skip_next = False
     for i, arg in enumerate(cmd):
         if skip_next:
             skip_next = False
             continue
-        if arg in ("-p", "-u", "--password", "--username") and i + 1 < len(cmd):
+        option = arg.split("=", 1)[0]
+        if option in sensitive_options and "=" in arg:
+            redacted_cmd.append(f"{option}=********")
+        elif arg in sensitive_options and i + 1 < len(cmd):
             redacted_cmd.append(arg)
             redacted_cmd.append("********")
             skip_next = True
+        elif "-p" in sensitive_options and arg.startswith("-p") and len(arg) > 2:
+            redacted_cmd.append("-p********")
         else:
             redacted_cmd.append(arg)
-    redacted_str = " ".join(redacted_cmd)
+    return " ".join(redacted_cmd)
+
+
+async def run_command_with_logging(cmd: list[str], description: str) -> None:
+    """Execute a shell command asynchronously and log its output in debug mode."""
+    redacted_str = _redact_command(cmd)
 
     logger.debug(f"[cyan]Running command: {redacted_str}[/cyan]")
     try:
@@ -387,19 +404,7 @@ def format_byte_size(value: int) -> str:
 
 async def run_7z_with_progress(cmd: list[str], usenet_dir: str, safe_name: str, _volume_size: str | None, total_size: int) -> None:
     """Execute 7z archiving/splitting with byte-based real-time progress monitoring."""
-    redacted_cmd = []
-    skip_next = False
-    for i, arg in enumerate(cmd):
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in ("-p", "-u", "--password", "--username") and i + 1 < len(cmd):
-            redacted_cmd.append(arg)
-            redacted_cmd.append("********")
-            skip_next = True
-        else:
-            redacted_cmd.append(arg)
-    redacted_str = " ".join(redacted_cmd)
+    redacted_str = _redact_command(cmd)
 
     logger.debug(f"[cyan]Running command: {redacted_str}[/cyan]")
 
@@ -533,19 +538,7 @@ async def run_par2_with_progress(cmd: list[str], cwd: str | None = None) -> None
     buffer everything into one blob until an unrelated real newline happens to show up.
     Reads raw chunks instead and splits on either '\\r' or '\\n' to get each update.
     """
-    redacted_cmd = []
-    skip_next = False
-    for i, arg in enumerate(cmd):
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in ("-p", "-u", "--password", "--username") and i + 1 < len(cmd):
-            redacted_cmd.append(arg)
-            redacted_cmd.append("********")
-            skip_next = True
-        else:
-            redacted_cmd.append(arg)
-    redacted_str = " ".join(redacted_cmd)
+    redacted_str = _redact_command(cmd)
 
     cwd_str = f" in {cwd}" if cwd else ""
     logger.debug(f"[cyan]Running command: {redacted_str}{cwd_str}[/cyan]")
@@ -632,19 +625,7 @@ async def run_nyuu_with_progress(cmd: list[str], cwd: str | None = None) -> None
     incrementally. `--progress log:Ns` instead emits a normal newline-terminated log line on
     a fixed interval, which is what's parsed here.
     """
-    redacted_cmd = []
-    skip_next = False
-    for i, arg in enumerate(cmd):
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in ("-p", "-u", "--password", "--username") and i + 1 < len(cmd):
-            redacted_cmd.append(arg)
-            redacted_cmd.append("********")
-            skip_next = True
-        else:
-            redacted_cmd.append(arg)
-    redacted_str = " ".join(redacted_cmd)
+    redacted_str = _redact_command(cmd)
 
     cwd_str = f" in {cwd}" if cwd else ""
     logger.debug(f"[cyan]Running command: {redacted_str}{cwd_str}[/cyan]")
@@ -731,23 +712,7 @@ async def run_nyuu_with_progress(cmd: list[str], cwd: str | None = None) -> None
 
 def _redact_pesto_command(cmd: list[str]) -> str:
     """Render a Pesto command without credentials or archive passwords."""
-    sensitive_options = {"-p", "--proxy", "-u", "--username", "--auth-password", "--password", "--nzb-password"}
-    redacted_cmd = []
-    skip_next = False
-    for i, arg in enumerate(cmd):
-        if skip_next:
-            skip_next = False
-            continue
-        option = arg.split("=", 1)[0]
-        if option in sensitive_options and "=" in arg:
-            redacted_cmd.append(f"{option}=********")
-        elif arg in sensitive_options and i + 1 < len(cmd):
-            redacted_cmd.append(arg)
-            redacted_cmd.append("********")
-            skip_next = True
-        else:
-            redacted_cmd.append(arg)
-    return " ".join(redacted_cmd)
+    return _redact_command(cmd, {"-p", "--proxy", "-u", "--username", "--auth-password", "--password", "--nzb-password"})
 
 
 async def run_pesto_with_progress(cmd: list[str], cwd: str | None = None, env: dict[str, str] | None = None) -> None:
@@ -1374,13 +1339,14 @@ async def prepare_and_upload_usenet(meta: Meta, config: dict[str, Any], *, prepa
             cmd_7z.extend([str(archive_out), str(input_path)])
 
             if is_debug and not path_7z:
-                logger.info(f"[yellow][DEBUG SIMULATION] Would run: {' '.join(cmd_7z)}[/yellow]")
+                logger.info(f"[yellow][DEBUG SIMULATION] Would run: {_redact_command(cmd_7z)}[/yellow]")
                 mock_7z = f"{archive_out}.001" if volume_size else archive_out
                 async with aiofiles.open(mock_7z, "wb") as f:
                     await f.write(b"mock 7z volume content")
                 upload_files = [Path(mock_7z)]
             else:
-                await run_7z_with_progress(cmd_7z, usenet_dir, archive_name, volume_size, total_size)
+                async with resource_slot("usenet-prep", "Usenet archive/PAR2 creation"):
+                    await run_7z_with_progress(cmd_7z, usenet_dir, archive_name, volume_size, total_size)
         else:
             logger.info("[cyan]Copying single file for upload...[/cyan]")
             dest_file = Path(usenet_dir) / Path(input_path).name
@@ -1419,7 +1385,8 @@ async def prepare_and_upload_usenet(meta: Meta, config: dict[str, Any], *, prepa
                 async with aiofiles.open(mock_par2, "wb") as f:
                     await f.write(b"mock par2 content")
             else:
-                await run_par2_with_progress(cmd_par2, cwd=str(upload_root))
+                async with resource_slot("usenet-prep", "Usenet archive/PAR2 creation"):
+                    await run_par2_with_progress(cmd_par2, cwd=str(upload_root))
 
             generated_par2_files = [file_path for file_path in sorted(Path(par2_output_dir).glob(f"{archive_name}.par2*")) if file_path.is_file()]
             upload_files.extend(file_path for file_path in generated_par2_files if file_path not in upload_files)
@@ -1657,7 +1624,8 @@ async def prepare_and_upload_usenet(meta: Meta, config: dict[str, Any], *, prepa
         else:
             post_started = time.monotonic()
             try:
-                await run_pesto_with_progress(cmd_pesto, cwd=str(upload_root), env=pesto_env)
+                async with resource_slot("usenet-post", "Usenet posting"):
+                    await run_pesto_with_progress(cmd_pesto, cwd=str(upload_root), env=pesto_env)
                 nntp_duration_ms = (time.monotonic() - post_started) * 1000
             except Exception:
                 # pesto writes the NZB to --out before it knows the post-check
@@ -1751,13 +1719,14 @@ async def prepare_and_upload_usenet(meta: Meta, config: dict[str, Any], *, prepa
         cmd_nyuu.extend(all_upload_files)
 
         if is_debug:
-            logger.info(f"[yellow][DEBUG SIMULATION] Would run Nyuu upload: {' '.join(cmd_nyuu)}[/yellow]")
+            logger.info(f"[yellow][DEBUG SIMULATION] Would run Nyuu upload: {_redact_command(cmd_nyuu)}[/yellow]")
             async with aiofiles.open(nzb_file, "w", encoding="utf-8") as f:
                 await f.write(mock_nzb_content)
         else:
             post_started = time.monotonic()
             try:
-                await run_nyuu_with_progress(cmd_nyuu, cwd=str(upload_root))
+                async with resource_slot("usenet-post", "Usenet posting"):
+                    await run_nyuu_with_progress(cmd_nyuu, cwd=str(upload_root))
                 nntp_duration_ms = (time.monotonic() - post_started) * 1000
             except Exception:
                 # nyuu writes the NZB progressively as files are posted, before
@@ -1780,7 +1749,7 @@ async def prepare_and_upload_usenet(meta: Meta, config: dict[str, Any], *, prepa
         # so the password never protected anything and shouldn't be advertised.
         if archive_password and not skip_archive and await aiofiles.ospath.exists(nzb_file):
             if is_debug:
-                logger.info(f"[cyan][DEBUG SIMULATION] Injecting password '{archive_password}' into NZB file...[/cyan]")
+                logger.info("[cyan][DEBUG SIMULATION] Injecting password into NZB file...[/cyan]")
             else:
                 logger.info("[cyan]Injecting password into NZB metadata...[/cyan]")
             await inject_nzb_password(nzb_file, archive_password)

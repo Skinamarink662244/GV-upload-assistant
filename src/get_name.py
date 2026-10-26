@@ -2,6 +2,7 @@
 import re
 import sys
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -9,6 +10,7 @@ import anitopy
 import cli_ui
 import guessit
 
+from src import webui_events
 from src.cleanup import cleanup_manager
 from src.console import logger
 from src.meta import Meta
@@ -29,6 +31,90 @@ TRACKER_DISC_REQUIREMENTS = {
 }
 
 
+@dataclass(frozen=True)
+class NameComponents:
+    """Release-name fields shared by the generic name and tracker-specific templates."""
+
+    type: str
+    title: str
+    alt_title: str
+    year: str
+    resolution: str
+    audio: str
+    hardcoded_subs: str
+    service: str
+    season: str
+    episode: str
+    part: str
+    repack: str
+    three_d: str
+    tag: str
+    source: str
+    uhd: str
+    hdr: str
+    hybrid: str
+    episode_title: str
+    edition: str
+
+
+def _name_text(value: object) -> str:
+    return "" if value is None or value is False else str(value)
+
+
+def build_name_components(meta: Meta) -> NameComponents:
+    year = str(meta.year) if meta.year is not None else ""
+    manual_year_value = meta.manual_year
+    if manual_year_value is not None and manual_year_value > 0:
+        year = str(manual_year_value)
+    resolution = meta.resolution
+    if resolution == "OTHER":
+        resolution = ""
+    season = _name_text(meta.season)
+    episode = meta.episode
+    if meta.manual_episode_title:
+        episode_title = meta.manual_episode_title
+    elif meta.daily_episode_title:
+        episode_title = meta.daily_episode_title
+    else:
+        episode_title = ""
+    # Hybrid has its own slot (get_edition sets webdv whenever the edition names it).
+    edition = " ".join(re.sub(r"\bhybrid\b", " ", meta.edition, flags=re.IGNORECASE).split())
+
+    if meta.category == "TV":
+        year = str(meta.year) if (meta.year is not None and meta.search_year != "") else ""
+        if meta.manual_date:
+            # Ignore season and year for --daily flagged shows, just use manual date stored in episode_name
+            season = ""
+            episode = ""
+    if meta.no_season is True:
+        season = ""
+    if meta.no_year is True:
+        year = ""
+
+    return NameComponents(
+        type=str(meta.type).upper(),
+        title=meta.title,
+        alt_title="" if meta.no_aka is True else meta.aka,
+        year=year,
+        resolution=resolution,
+        audio=meta.audio,
+        hardcoded_subs="HC" if meta.hardcoded_subs else "",
+        service=_name_text(meta.service),
+        season=season,
+        episode=episode,
+        part=meta.part,
+        repack=meta.repack,
+        three_d=meta.three_d,
+        tag=meta.tag or "",
+        source=_name_text(meta.source),
+        uhd=_name_text(meta.uhd),
+        hdr=meta.hdr,
+        hybrid="Hybrid" if meta.webdv else "",
+        episode_title=episode_title,
+        edition=edition,
+    )
+
+
 class NameManager:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
@@ -45,35 +131,27 @@ class NameManager:
                 meta.distributor = distributor
             if region and "SKIPPED" not in region:
                 meta.region = region
-        type = str(meta.type).upper()
-        title = meta.title
-        alt_title = meta.aka
-        year = str(meta.year) if meta.year is not None else ""
-        manual_year_value = meta.manual_year
-        if manual_year_value is not None and manual_year_value > 0:
-            year = str(manual_year_value)
-        resolution = meta.resolution
-        if resolution == "OTHER":
-            resolution = ""
-        audio = meta.audio
-        hardcoded_subs = "HC" if meta.hardcoded_subs else ""
-        service = str(meta.service)
-        season = str(meta.season)
-        episode = meta.episode
-        part = meta.part
-        repack = meta.repack
-        three_d = meta.three_d
-        tag = meta.tag or ""
-        source = str(meta.source)
-        uhd = str(meta.uhd)
-        hdr = meta.hdr
-        hybrid = "Hybrid" if meta.webdv else ""
-        if meta.manual_episode_title:
-            episode_title = meta.manual_episode_title
-        elif meta.daily_episode_title:
-            episode_title = meta.daily_episode_title
-        else:
-            episode_title = ""
+        components = build_name_components(meta)
+        type = components.type
+        title = components.title
+        alt_title = components.alt_title
+        year = components.year
+        resolution = components.resolution
+        audio = components.audio
+        hardcoded_subs = components.hardcoded_subs
+        service = components.service
+        season = components.season
+        episode = components.episode
+        part = components.part
+        repack = components.repack
+        three_d = components.three_d
+        tag = components.tag
+        source = components.source
+        uhd = components.uhd
+        hdr = components.hdr
+        hybrid = components.hybrid
+        episode_title = components.episode_title
+        edition = components.edition
         video_codec = ""
         video_encode = ""
         region = ""
@@ -87,22 +165,7 @@ class NameManager:
         else:
             video_codec = meta.video_codec
             video_encode = meta.video_encode
-        edition = meta.edition
-        if "hybrid" in edition.upper():
-            edition = edition.replace("Hybrid", "").strip()
 
-        if meta.category == "TV":
-            year = str(meta.year) if (meta.year is not None and meta.search_year != "") else ""
-            if meta.manual_date:
-                # Ignore season and year for --daily flagged shows, just use manual date stored in episode_name
-                season = ""
-                episode = ""
-        if meta.no_season is True:
-            season = ""
-        if meta.no_year is True:
-            year = ""
-        if meta.no_aka is True:
-            alt_title = ""
         if meta.debug:
             logger.debug("[cyan]get_name cat/type")
             logger.debug(f"CATEGORY: {meta.category}")
@@ -241,7 +304,7 @@ class NameManager:
         lang_display = "" if lang_display.lower() in ("english", "eng", "en") else lang_display.upper().replace("I", "i")
 
         # Source logic: RETAiL, SCAN, HYBRiD
-        source = meta.source or "".strip().upper()
+        source = (meta.source or "").strip().upper()
         manual_source = str(meta.manual_source or "").strip().upper()
         if manual_source in ("RETAIL", "SCAN", "HYBRID"):
             source = manual_source
@@ -305,8 +368,8 @@ class NameManager:
         edition = str(meta.manual_edition or meta.edition or "").strip()
         year = str(meta.manual_year or meta.year or "").strip()
         platform = str(meta.manual_platform or meta.platform or "").strip().upper()
-        game_version = meta.game_version or "".strip()
-        repack = meta.repack or "".strip().upper()
+        game_version = (meta.game_version or "").strip()
+        repack = (meta.repack or "").strip().upper()
         force_multi = bool(meta.manual_multi)
 
         #  language / MULTI tag
@@ -677,7 +740,8 @@ class NameManager:
                 region_id = await self.common.unit3d_region_ids(tracker_region, tracker=tracker)
                 if requirements.get("region") == "mandatory":
                     while not region_id and tracker_region and tracker_region != "SKIPPED":
-                        logger.warning(f"Region '{tracker_region}' is not recognized by {tracker}.")
+                        logger.warning(f"Region '{tracker_region}' is not recognized by {tracker}.", extra={"ua_gui": False})
+                        webui_events.notice("attention", f"Region '{tracker_region}' is not recognized.", tracker=tracker, key=f"region:{tracker}")
                         if meta.unattended and not meta.unattended_confirm:
                             break
                         replacement = await self._prompt_for_field(meta, f"Region code for {tracker} (press Enter to skip this tracker)", True)
@@ -690,7 +754,8 @@ class NameManager:
                 distributor_id = await self.common.unit3d_distributor_ids(distributor_name, tracker=tracker)
                 if requirements.get("distributor") == "mandatory":
                     while not distributor_id and distributor_name and distributor_name != "SKIPPED":
-                        logger.warning(f"Distributor '{distributor_name}' is not recognized by {tracker}.")
+                        logger.warning(f"Distributor '{distributor_name}' is not recognized by {tracker}.", extra={"ua_gui": False})
+                        webui_events.notice("attention", f"Distributor '{distributor_name}' is not recognized.", tracker=tracker, key=f"distributor:{tracker}")
                         if meta.unattended and not meta.unattended_confirm:
                             break
                         replacement = await self._prompt_for_field(meta, f"Distributor for {tracker} (press Enter to skip this tracker)", True)
@@ -705,7 +770,8 @@ class NameManager:
                         reason = f"unsupported region '{tracker_region}'" if tracker_region and tracker_region != "SKIPPED" else "missing region information"
                     else:
                         reason = f"unsupported distributor '{distributor_name}'" if distributor_name and distributor_name != "SKIPPED" else "missing distributor information"
-                    logger.warning(f"Skipping upload to {tracker}: {reason}.")
+                    logger.warning(f"Skipping upload to {tracker}: {reason}.", extra={"ua_gui": False})
+                    webui_events.notice("attention", f"Not uploading: {reason}.", tracker=tracker, key=f"disc-info:{tracker}")
                     trackers_to_remove.append(tracker)
 
         return region_name, distributor_name, trackers_to_remove
@@ -717,7 +783,8 @@ class NameManager:
         suffix = " (MANDATORY): " if is_mandatory else " (optional, press Enter to skip): "
         prompt = f"{field_name} not found for disc. Please enter it manually{suffix}"
         try:
-            value = cli_ui.ask_string(prompt)
+            with webui_events.answer_buttons([("", "Skip this tracker" if is_mandatory else "Skip")]):
+                value = cli_ui.ask_string(prompt)
             return value.upper() if value else "SKIPPED"
         except EOFError:
             logger.info("\n[red]Exiting on user request (Ctrl+C)[/red]")

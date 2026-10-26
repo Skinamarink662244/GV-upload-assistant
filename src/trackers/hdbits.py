@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import asyncio
 import json
 import re
 import time
@@ -18,8 +17,8 @@ from src.console import console, logger
 from src.description_review import get_base_description
 from src.exceptions import *  # noqa F403
 from src.meta import Meta
+from src.screenshot_manifest import files as manifest_files
 from src.stats import record_event_async
-from src.temp_paths import screenshots_dir
 from src.torrent_policy import HDBITS_POLICY
 from src.trackers.common import Common
 from src.trackers.naming import add_incomplete_pack_marker
@@ -210,6 +209,10 @@ class HDBits:
 
     async def get_name(self, meta: Meta) -> str:
         hdb_name = meta.name
+        title = ""
+        if meta.title and (hdb_name == meta.title or hdb_name.startswith(f"{meta.title} ")):
+            title = str(meta.imdb_info.get("aka") or meta.imdb_info.get("title") or meta.title)
+            hdb_name = hdb_name[len(meta.title) :]
         audio = meta.audio
         hdb_name = hdb_name.replace("H.265", "HEVC")
         if meta.service:
@@ -223,13 +226,6 @@ class HDBits:
         else:
             hdb_name = hdb_name.replace(audio, audio.replace(" Atmos", ""))
         hdb_name = hdb_name.replace(meta.aka, "")
-        if meta.imdb_info:
-            hdb_name = hdb_name.replace(meta.title, meta.imdb_info["aka"])
-            meta_year_str = str(meta.year) if meta.year is not None else ""
-            imdb_year_str = str(meta.imdb_info.get("year", meta_year_str))
-            if meta_year_str != imdb_year_str and meta_year_str != "":
-                hdb_name = hdb_name.replace(meta_year_str, imdb_year_str)
-        # Remove Dubbed/Dual-Audio from title
         hdb_name = hdb_name.replace("PQ10", "HDR")
         hdb_name = hdb_name.replace("Dubbed", "").replace("Dual-Audio", "")
         hdb_name = hdb_name.replace("REMUX", "Remux")
@@ -237,8 +233,16 @@ class HDBits:
         hdb_name = hdb_name.replace("UHD Remux", "Remux")
         hdb_name = hdb_name.replace("DTS-HD HRA", "DTS-HD HR")
         hdb_name = " ".join(hdb_name.split())
-        hdb_name = re.sub(r"[^0-9a-zA-ZÀ-ÿ. :&+'\-\[\]]+", "", hdb_name)
-        return add_incomplete_pack_marker(hdb_name.replace(" .", ".").replace("..", "."), meta, self.tracker)
+        hdb_name = add_incomplete_pack_marker(hdb_name, meta, self.tracker)
+
+        year = str(meta.imdb_info.get("year") or meta.year or "")
+        if title and year:
+            if hdb_name.startswith(f"{meta.year} "):
+                hdb_name = hdb_name.replace(str(meta.year), year, 1)
+            if meta.category == "TV" and meta.tv_pack and meta.imdb_info.get("type") in ("tvMiniSeries", "tv mini series"):
+                hdb_name = re.sub(r"^S01(?=\s|$)", "", hdb_name.removeprefix(f"{year} ")).lstrip()
+                hdb_name = f"{year} {hdb_name}"
+        return f"{title} {hdb_name}".strip()
 
     async def upload(self, meta: Meta) -> bool | None:
         common = Common(config=self.config)
@@ -674,22 +678,7 @@ class HDBits:
                 logger.debug(f"{self.tracker}: [cyan]{i}: {Path(path).name}")
         else:
             thumb_size = "w300"
-            screenshot_dir = screenshots_dir(meta.base_dir, meta.uuid)
-            # similar to uploadscreens.py L546
-            image_patterns = ["*.png", ".[!.]*.png"]
-            image_glob: list[str] = []
-            for image_pattern in image_patterns:
-                glob_results = await asyncio.to_thread(lambda pat=image_pattern: [str(p) for p in Path(screenshot_dir).glob(pat)])
-                image_glob.extend(glob_results)
-            unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
-            unwanted_files: set[str] = set()
-            for unwanted_pattern in unwanted_patterns:
-                glob_results = await asyncio.to_thread(lambda pat=unwanted_pattern: [str(p) for p in Path(screenshot_dir).glob(pat)])
-                unwanted_files.update(glob_results)
-                hidden_glob_results = await asyncio.to_thread(lambda pat=unwanted_pattern: [str(p) for p in Path(screenshot_dir).glob(f".{pat}")])
-                unwanted_files.update(hidden_glob_results)
-            image_glob = [file for file in image_glob if file not in unwanted_files]
-            all_image_files = list(set(image_glob))
+            all_image_files = [str(path) for path in manifest_files(meta.base_dir, meta.uuid, "main") if path.suffix.casefold() == ".png"]
 
         # At this point, all_image_files contains paths to all images we want to upload
         if not all_image_files:

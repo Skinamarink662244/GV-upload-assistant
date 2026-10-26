@@ -25,8 +25,8 @@ from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import languages_manager
 from src.meta import Meta
+from src.screenshot_manifest import files as manifest_files
 from src.stats import record_event_async
-from src.temp_paths import screenshots_dir
 from src.tmdb import TmdbManager
 from src.trackers.common import Common
 
@@ -445,6 +445,8 @@ class BJShare:
 
         if has_pt_audio:
             if is_original_pt:
+                if languages_manager.has_explicit_european_portuguese_audio(meta):
+                    return "Outro"
                 return "Nacional"
             if len(audio_languages) > 1:
                 return "Dual Áudio"
@@ -854,8 +856,10 @@ class BJShare:
             BJShare.secret_token = auth_match.group(1)
 
             fallback_response = candidate
-            if response is None and BeautifulSoup(candidate.text, "html.parser").find("div", class_="main_column"):
+            # The site resolves IMDb and TMDB IDs to the same group, so the next ID is only a fallback.
+            if BeautifulSoup(candidate.text, "html.parser").find("div", class_="main_column"):
                 response = candidate
+                break
 
         response = response or fallback_response
         if response is None:
@@ -1244,9 +1248,8 @@ class BJShare:
         return None
 
     async def get_screenshots(self, meta: Meta) -> list[str]:
-        screens_dir = screenshots_dir(meta.base_dir, meta.uuid)
         supported_suffixes = {".pjp", ".jfif", ".jpe", ".pjpeg", ".jpeg", ".jpg", ".png", ".gif", ".webp"}
-        local_files = sorted(path for path in screens_dir.iterdir() if path.is_file() and path.suffix.casefold() in supported_suffixes)
+        local_files = [path for path in manifest_files(meta.base_dir, meta.uuid, "main") if path.suffix.casefold() in supported_suffixes]
 
         disc_menu_links = [img.get("raw_url") for img in meta.menu_images if img.get("raw_url")][:3]
 

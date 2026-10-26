@@ -21,8 +21,8 @@ from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import languages_manager
 from src.meta import Meta
+from src.screenshot_manifest import files as manifest_files
 from src.stats import record_event_async
-from src.temp_paths import screenshots_dir
 from src.trackers.common import Common
 from src.trackers.naming import add_incomplete_pack_marker
 
@@ -485,8 +485,7 @@ class AZTrackerBase:
             )
 
     async def get_screenshots(self, meta: Meta) -> list[str] | None:
-        screens_dir = screenshots_dir(meta.base_dir, meta.uuid)
-        local_files = sorted(path for path in screens_dir.glob("*.png") if path.is_file())
+        local_files = [path for path in manifest_files(meta.base_dir, meta.uuid, "main") if path.suffix.casefold() == ".png"]
         results: list[str] = []
 
         limit = 3 if (meta.category == "TV" and meta.tv_pack == 0) else 15
@@ -943,7 +942,7 @@ class AZTrackerBase:
         }
 
         source_type = (meta.type or "").strip().lower()
-        source = meta.source or "".strip().lower()
+        source = (meta.source or "").strip().lower()
         is_disc = (meta.is_disc or "").strip().lower()
 
         html_label = ""
@@ -955,7 +954,7 @@ class AZTrackerBase:
                 html_label = "DVD"
 
         elif source_type == "remux":
-            if "dvd" in source:
+            if source in ("dvd", "pal dvd", "ntsc dvd"):
                 html_label = "DVD Remux"
             elif source in ("bluray", "blu-ray"):
                 html_label = "BluRay REMUX"

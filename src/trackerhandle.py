@@ -9,6 +9,7 @@ from typing import Any, cast
 import cli_ui
 from rich.markup import escape
 
+from src import webui_events
 from src.artwork import is_valid_cover_image
 from src.cleanup import cleanup_manager
 from src.cogs.redaction import Redaction
@@ -20,6 +21,8 @@ from src.manualpackage import ManualPackageManager
 from src.meta import Meta
 from src.qbitwait import Wait
 from src.rehostimages import check_tracker_image_hosts, has_restricted_image_hosts, select_common_image_host
+from src.slot_rules.models import Verdict
+from src.slot_rules.registry import evaluate_slots
 from src.stats import record_event_async
 from src.torrent_provision import provision_tracker_torrents
 from src.trackers.GAZELLE.passthepopcorn import PassThePopcorn
@@ -72,6 +75,28 @@ async def process_trackers(
         default=0,
     )
 
+    def publish_tracker_result(tracker: str, tracker_class: Any, status: Mapping[str, Any], is_success: bool) -> None:
+        """Send the result to the Web UI's GUI mode, whatever the terminal print settings are."""
+        if not webui_events.enabled():
+            return
+        duration = meta.get(f"{tracker}_upload_duration")
+        duration_value = float(duration) if isinstance(duration, (int, float)) else None
+        if not is_success:
+            webui_events.tracker_result(tracker, "failed", message=status.get("status_message"), duration=duration_value)
+            return
+        link = status.get("torrent_link")
+        if not link and "torrent_id" in status:
+            link = f"{getattr(tracker_class, 'torrent_url', '')}{status['torrent_id']}"
+        message = str(status.get("status_message", ""))
+        webui_events.tracker_result(
+            tracker,
+            "success",
+            link=link,
+            torrent_id=status.get("torrent_id"),
+            message=message if message and "data error" not in message else None,
+            duration=duration_value,
+        )
+
     def print_tracker_result(
         tracker: str,
         tracker_class: Any,
@@ -79,6 +104,7 @@ async def process_trackers(
         is_success: bool,
     ) -> None:
         """Print tracker upload result immediately after upload completes."""
+        publish_tracker_result(tracker, tracker_class, status, is_success)
         try:
             # Check config settings for what to print
             print_links = meta.print_tracker_links
@@ -114,8 +140,9 @@ async def process_trackers(
 
                 message = f"{tracker_label} {' '.join(result_parts)}" if result_parts else None
             else:
-                if "status_message" in status and "data error" in str(status["status_message"]):
-                    logger.info(f"[red]{tracker_label} {escape(str(status['status_message']))}[/red]")
+                status_message = str(status.get("status_message", "")).strip()
+                if status_message:
+                    logger.info(f"[red]{tracker_label} {escape(Redaction.redact_private_info(status_message))}[/red]", extra={"ua_gui": False})
                     return
 
             if message is not None:
@@ -193,6 +220,13 @@ async def process_trackers(
                         real_new_dupes = [d for d in new_dupes if not is_in_initial(d)]
 
                         if real_new_dupes:
+                            slot_decision = await evaluate_slots(new_dupes, meta, tracker_name, config)
+                            if slot_decision is not None and slot_decision.verdict is Verdict.ALLOW:
+                                logger.info(f"[green]{tracker_name}: new releases appeared during the wait, but slot rules still allow this upload.[/green]")
+                                return True
+                            if slot_decision is not None and slot_decision.verdict is Verdict.BLOCK:
+                                logger.info(f"[red]{tracker_name}: a release that fills this slot appeared during the wait. Automatically skipping upload.[/red]")
+                                return False
                             dupe_checker = DupeChecker(config)
                             real_new_dupes = cast(list[Any], await dupe_checker.filter_dupes(real_new_dupes, meta, tracker_name))
                             if real_new_dupes:
@@ -239,7 +273,7 @@ async def process_trackers(
                 else:
                     status["upload_success"] = False
                     print_tracker_result(tracker, tracker_class, status, False)
-                    logger.info(f"[red]{tracker} upload failed or returned data error.[/red]")
+                    logger.info(f"[red]{tracker} upload failed or returned data error.[/red]", extra={"ua_gui": False})
 
         elif tracker in other_api_trackers or tracker in http_trackers:
             tracker_status = meta.tracker_status
@@ -280,7 +314,7 @@ async def process_trackers(
                 else:
                     status["upload_success"] = False
                     print_tracker_result(tracker, tracker_class, status, False)
-                    logger.info(f"[red]{tracker} upload failed or returned data error.[/red]")
+                    logger.info(f"[red]{tracker} upload failed or returned data error.[/red]", extra={"ua_gui": False})
 
         elif tracker == "MANUAL":
             if meta.unattended:
@@ -347,7 +381,7 @@ async def process_trackers(
                     else:
                         status["upload_success"] = False
                         print_tracker_result(tracker, ptp, status, False)
-                        logger.info(f"[red]{tracker} upload failed or returned data error.[/red]")
+                        logger.info(f"[red]{tracker} upload failed or returned data error.[/red]", extra={"ua_gui": False})
                 except Exception:
                     logger.info(traceback.format_exc(), extra={"markup": False})
                     return

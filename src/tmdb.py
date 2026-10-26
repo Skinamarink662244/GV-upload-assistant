@@ -15,6 +15,7 @@ import cli_ui
 import guessit
 import httpx
 
+from src import webui_events
 from src.args import Args
 from src.cleanup import cleanup_manager
 from src.console import logger, prompt_in_thread
@@ -706,6 +707,9 @@ async def get_tmdb_id(
                         logger.info("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
                         tmdb_url = "https://www.themoviedb.org/movie/" if category == "MOVIE" else "https://www.themoviedb.org/tv/"
 
+                        labels: list[str] = []
+                        posters: list[str] = []
+                        details: list[dict[str, str]] = []
                         for idx, result in enumerate(sorted_results):
                             title = result.get("title") or result.get("name", "")
                             year = (result.get("release_date") or result.get("first_air_date") or "")[:4]
@@ -718,12 +722,30 @@ async def get_tmdb_id(
                             if overview:
                                 logger.info(f"[green]Overview:[/green] {overview[:200]}{'...' if len(overview) > 200 else ''}")
                             logger.info("")
+                            # The GUI's answer buttons: the synopsis tells similar titles apart.
+                            labels.append(f"{title} ({year})" if year else title)
+                            details.append(
+                                {
+                                    "meta": f"TMDb {result['id']} · similarity {similarity_score:.2f}",
+                                    "text": overview,
+                                    "link": f"{tmdb_url}{result['id']}",
+                                    "link_label": "TMDb",
+                                }
+                            )
+                            poster_path = result.get("poster_path")
+                            posters.append(f"https://image.tmdb.org/t/p/w92{poster_path}" if poster_path else "")
 
                         selection: str = ""
                         while True:
-                            logger.info("Enter the number of the correct entry, or manual TMDb ID (tv/12345 or movie/12345):")
                             try:
-                                selection = await prompt_in_thread(cli_ui.ask_string, "Or push enter to try a different search: ") or ""
+                                with webui_events.numbered_options(labels, actions=[("", "Try a different search")], images=posters, details=details):
+                                    selection = (
+                                        await prompt_in_thread(
+                                            cli_ui.ask_string,
+                                            "Enter the number of the correct entry, a TMDb ID (tv/12345 or movie/12345), or press Enter to try a different search: ",
+                                        )
+                                        or ""
+                                    )
                             except EOFError:
                                 logger.info("\n[red]Exiting on user request (Ctrl+C)[/red]")
                                 await cleanup_manager.cleanup()
@@ -1175,8 +1197,9 @@ async def tmdb_other_meta(
 
                 # Process TVDB ID
                 if tvdb_id == 0:
-                    tvdb_id_str = external.get("tvdb_id", None)
-                    tvdb_id = (int(tvdb_id_str) if tvdb_id_str.isdigit() else 0) if isinstance(tvdb_id_str, str) and tvdb_id_str not in ["", " ", "None", "null"] else 0
+                    tvdb_id_str = str(external.get("tvdb_id") or "")
+                    tvdb_id = int(tvdb_id_str) if tvdb_id_str.isdecimal() else 0
+                    logger.debug(f"[blue]TVDB ID from TMDB external IDs: {tvdb_id}[/blue]")
             except Exception:
                 logger.info("[bold red]Failed to process external IDs[/bold red]")
 

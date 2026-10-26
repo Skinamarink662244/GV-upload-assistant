@@ -1,16 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
+from dataclasses import replace
 from typing import Any
 
 import aiofiles
 
 from src.console import logger
 from src.get_desc import DescriptionBuilder
+from src.get_name import build_name_components
 from src.meta import Meta
-from src.trackers.naming import add_incomplete_pack_marker
+from src.trackers.naming import BLU_NAME_RULES, add_incomplete_pack_marker, build_video_name, with_imdb_title
 from src.trackers.UNIT3D import UNIT3D
 
 Config = dict[str, Any]
+ULCX_NAME_RULES = replace(BLU_NAME_RULES, hybrid_on_webdl=False)
 
 
 class ULCX(UNIT3D):
@@ -158,15 +161,31 @@ class ULCX(UNIT3D):
                             logger.info(f"{self.tracker}: [bold red]LPCM audio tracks are not allowed on non-disc uploads.[/bold red]")
                             return False
 
-                # Helper to get channel count
+                # Helper to get channel count (Channels_Original is "Object Based" on Atmos/DTS:X)
                 def get_channels(t: dict[str, Any]) -> int:
-                    c = t.get("Channels_Original") or t.get("Channels") or t.get("Channel(s)") or 0
-                    match = re.search(r"\d+", str(c))
-                    return int(match.group(0)) if match else 0
+                    for key in ("Channels_Original", "Channels", "Channel(s)"):
+                        match = re.search(r"\d+", str(t.get(key) or ""))
+                        if match:
+                            return int(match.group(0))
+                    return 0
+
+                # Helper to normalize the audio codec. MediaInfo reports TrueHD as "MLP FBA"
+                # and DTS-HD MA / DTS:X as "DTS" with the XLL extension.
+                def get_audio_codec(t: dict[str, Any]) -> str:
+                    fmt = str(t.get("Format") or "").upper()
+                    commercial = str(t.get("Format_Commercial_IfAny") or "").upper()
+                    if fmt.startswith("MLP") or fmt == "TRUEHD" or "TRUEHD" in commercial:
+                        return "TRUEHD"
+                    if fmt.startswith("DTS"):
+                        profile = str(t.get("Format_Profile") or "").upper()
+                        features = str(t.get("Format_AdditionalFeatures") or "").upper()
+                        if "XLL" in features or "MA" in profile.split(" / ") or "MASTER AUDIO" in commercial:
+                            return "DTS-HD MA"
+                    return fmt
 
                 # Helper to determine if audio format is lossless
-                def is_lossless_audio(fmt: str, profile: str) -> bool:
-                    return fmt in ("PCM", "LPCM", "TRUEHD", "FLAC") or (fmt.startswith("DTS") and "MA" in profile)
+                def is_lossless_audio(t: dict[str, Any]) -> bool:
+                    return get_audio_codec(t) in ("PCM", "LPCM", "TRUEHD", "FLAC", "DTS-HD MA")
 
                 # Section 6.9: FLAC mono/stereo only on non-disc
                 if not meta.is_disc:
@@ -179,10 +198,9 @@ class ULCX(UNIT3D):
                 # Section 4.2.1: Remux Audio Rules
                 if meta.type == "REMUX":
                     for a in audio_tracks:
-                        fmt = str(a.get("Format", "")).upper()
-                        profile = str(a.get("Format_Profile", "")).upper()
+                        fmt = get_audio_codec(a)
                         ch = get_channels(a)
-                        is_lossless = is_lossless_audio(fmt, profile)
+                        is_lossless = is_lossless_audio(a)
 
                         # 4.2.1.1: Lossless stereo must be FLAC 2.0
                         if is_lossless and ch == 2 and fmt != "FLAC":
@@ -205,17 +223,15 @@ class ULCX(UNIT3D):
                     height = meta.video_height or 0
                     if res in ("720p", "1080p", "1080i") or (height > 0 and height <= 1080):
                         for a in audio_tracks:
-                            fmt = str(a.get("Format", "")).upper()
-                            profile = str(a.get("Format_Profile", "")).upper()
-                            ch = get_channels(a)
-                            is_lossless = is_lossless_audio(fmt, profile)
-                            if is_lossless and ch > 2:
-                                logger.info(f"{self.tracker}: [bold red]Lossless multi-channel audio is not permitted on 1080p or lower encodes.[/bold red]")
+                            if is_lossless_audio(a) and get_channels(a) > 2:
+                                logger.info(
+                                    f"{self.tracker}: [bold red]Lossless multi-channel audio ({get_audio_codec(a)}) is not permitted on 1080p or lower encodes.[/bold red]"
+                                )
                                 return False
 
                 # Section 6.3: TrueHD compatibility track check
                 if not meta.is_disc:
-                    has_truehd = any(str(a.get("Format", "")).upper() == "TRUEHD" for a in audio_tracks)
+                    has_truehd = any(get_audio_codec(a) == "TRUEHD" for a in audio_tracks)
                     if has_truehd:
                         has_ac3 = any(str(a.get("Format", "")).upper() in ("AC-3", "AC3") for a in audio_tracks)
                         if not has_ac3:
@@ -283,24 +299,9 @@ class ULCX(UNIT3D):
         return {"description": desc}
 
     async def get_name(self, meta: Meta) -> dict[str, str]:
-        ulcx_name = meta.name
-        imdb_name = meta.imdb_info.get("title", "")
-        imdb_year = str(meta.imdb_info.get("year", ""))
-        imdb_aka = meta.imdb_info.get("aka", "")
-        year = str(meta.year) if meta.year is not None else ""
-        aka = meta.aka
-        if imdb_name and imdb_name.strip():
-            if aka:
-                ulcx_name = ulcx_name.replace(f"{aka} ", "", 1)
-            ulcx_name = ulcx_name.replace(f"{meta.title}", imdb_name, 1)
-            if imdb_aka and imdb_aka.strip() and imdb_aka != imdb_name and not meta.no_aka and not meta.anime:
-                ulcx_name = ulcx_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
-        if "Hybrid" in ulcx_name and meta.type == "WEBDL":
-            ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
-        if meta.category != "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
-            ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
-
-        if meta.type == "WEBDL" and ("hybrid" in meta.edition.lower() or meta.webdv):
-            ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
-
+        # ULCX omits the AKA for anime and Hybrid for WEB-DLs.
+        components = with_imdb_title(meta, build_name_components(meta))
+        if meta.anime:
+            components = replace(components, alt_title="")
+        ulcx_name = await build_video_name(meta, ULCX_NAME_RULES, self.tracker, components) or meta.name
         return {"name": add_incomplete_pack_marker(ulcx_name, meta, self.tracker)}

@@ -10,12 +10,13 @@ from src.languages import languages_manager
 from src.meta import Meta
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.common import Common
+from src.trackers.naming import TmdbTvNaming
 from src.trackers.UNIT3D import UNIT3D
 
 Config = dict[str, Any]
 
 
-class InfinityHD(UNIT3D):
+class InfinityHD(TmdbTvNaming, UNIT3D):
     """
     INFINITYHD is a Private Torrent Tracker for MOVIES / TV / ANIME
     """
@@ -154,6 +155,7 @@ class InfinityHD(UNIT3D):
         "Zero00",
         "Zeus",
     )
+    banned_url = f"{base_url}/api/banned-groups"
     id_url = f"{base_url}/api/torrents/"
     upload_url = f"{base_url}/api/torrents/upload"
     search_url = f"{base_url}/api/torrents/filter"
