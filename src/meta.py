@@ -341,6 +341,7 @@ class Meta:
     matched_tracker: str = ""
     max_piece_size: int = 0
     mediainfo: dict[str, Any] = field(default_factory=dict[str, Any])
+    mediainfo_file: str | None = None
     menu_images: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     mismatched_imdb_id: int = 0
     mkbrr_threads: str | int | None = None

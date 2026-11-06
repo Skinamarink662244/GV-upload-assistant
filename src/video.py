@@ -158,8 +158,25 @@ class VideoManager:
             entries.extend(Path(dirpath) / name for name in filenames if not name.startswith("._") and (Path(dirpath) / name).is_file())
         return entries
 
-    async def get_video(self, videoloc: str, sorted_filelist: bool = False, recursive: bool = False) -> tuple[str, list[str]]:
+    @staticmethod
+    def pick_mediainfo_file(filelist: list[str], wanted: str) -> str | None:
+        wanted = wanted.strip().lower()
+        names = {f: Path(f).name.lower() for f in filelist}
+        matches = [f for f, name in names.items() if name == wanted]
+        if not matches:
+            episode = re.fullmatch(r"(?:s(\d+))?e(\d+)", wanted)
+            if episode:
+                season = rf"s0*{int(episode.group(1))}" if episode.group(1) else r"(?:s\d+)?"
+                pattern = rf"(?<![a-z0-9]){season}e0*{int(episode.group(2))}(?!\d)"
+                matches = [f for f, name in names.items() if re.search(pattern, name)]
+            else:
+                matches = [f for f, name in names.items() if wanted in name]
+        return matches[0] if len(matches) == 1 else None
+
+    async def get_video(self, videoloc: str, sorted_filelist: bool = False, mediainfo_file: str | None = None, recursive: bool = False) -> tuple[str, list[str]]:
         """Return the main video and every video in ``videoloc``.
+
+        ``mediainfo_file`` picks the pack file used for mediainfo (see --mediainfo-file).
 
         ``recursive`` also collects videos from subfolders, for packs that nest
         their videos one or more folders below the release root.
@@ -241,6 +258,13 @@ class VideoManager:
             except IndexError:
                 logger.info("[bold red]No Video files found")
                 return "", []
+            if mediainfo_file:
+                picked = self.pick_mediainfo_file(filelist, mediainfo_file)
+                if picked:
+                    video = picked
+                    logger.info(f"[green]Using {Path(picked).name} for mediainfo[/green]")
+                else:
+                    logger.warning(f"[yellow]--mediainfo-file {mediainfo_file} didn't match exactly one file, using {Path(video).name}[/yellow]")
         else:
             video = videoloc
             filelist.append(videoloc)

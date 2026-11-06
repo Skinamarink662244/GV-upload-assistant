@@ -722,7 +722,7 @@ async def process_media_files(prep_instance: Any, meta: Meta, videoloc: str, bdi
             video = videopath
         else:
             # XXX site-rip packs often nest their videos in per-part or per-year folders.
-            videopath, meta.filelist = await video_manager.get_video(videoloc, meta.sorted_filelist, recursive=meta.category == "XXX")
+            videopath, meta.filelist = await video_manager.get_video(videoloc, meta.sorted_filelist, meta.mediainfo_file, recursive=meta.category == "XXX")
             if not videopath or not meta.filelist:
                 raise ValueError(f"No video files found in {videoloc}")
             filelist = meta.filelist
