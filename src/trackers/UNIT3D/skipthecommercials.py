@@ -1,10 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
-from typing import Any
+from typing import Any, ClassVar
 
 from src.console import logger
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
+from src.manual_input import confirm_override
 from src.meta import Meta
 from src.rehostimages import ImageHostPolicy, RehostImagesManager
 from src.trackers.common import Common
@@ -19,101 +19,27 @@ class SkipTheCommercials(UNIT3D):
     documentary movies.
     """
 
+    # Options of the ID fields, offered in the Web UI preview (the getters ignore mapping_only).
+    payload_choices: ClassVar[dict[str, tuple[tuple[str, str], ...]]] = {
+        "type_id": (
+            ("1", "DISC"),
+            ("2", "REMUX"),
+            ("3", "ENCODE"),
+            ("4", "WEBDL"),
+            ("5", "WEBRIP"),
+            ("6", "HDTV"),
+            ("13", "WEB pack"),
+            ("14", "SD WEB pack"),
+            ("17", "SD pack"),
+            ("18", "HD pack"),
+        ),
+    }
+
     tracker = "SKIPTHECOMMERCIALS"
     display_name = "SkipTheCommercials"
     allows_bloated_audio = True
     base_url = "https://skipthecommercials.xyz"
-    banned_groups = (
-        "-ZR-",
-        "126811",
-        "4K4U",
-        "Aisha",
-        "Aisha@RFX",
-        "Alcaide_Kira",
-        "AOS",
-        "ARCADE",
-        "AV1D",
-        "aXXo",
-        "B3LLUM",
-        "BiTOR",
-        "BONE",
-        "BRrip",
-        "CM8",
-        "CREATiVE24",
-        "CrEwSaDe",
-        "CTFOH",
-        "d3g",
-        "dAV1nci",
-        "DepraveD",
-        "DNL",
-        "EGEN",
-        "eranger2",
-        "EVO",
-        "FaNGDiNG0",
-        "FGT",
-        "flower",
-        "FoxTorrentX",
-        "GalaxyTV",
-        "HD2DVD",
-        "HDHub4u",
-        "HDT",
-        "HDTime",
-        "iHYTECH",
-        "ION10",
-        "iPlanet",
-        "iVy",
-        "KaPPa",
-        "KiNGDOM",
-        "LAMA",
-        "MeGusta",
-        "mHD",
-        "mSD",
-        "NaNi",
-        "NhaNc3",
-        "nHD",
-        "nikt0",
-        "nSD",
-        "OFT",
-        "OldT",
-        "PAAI",
-        "PANDEMONiUM",
-        "PHOCiS",
-        "PiGNUS",
-        "PRODJi",
-        "PSA",
-        "R&H",
-        "RARBG",
-        "Rifftrax",
-        "SANTi",
-        "SasukeducK",
-        "seedpool",
-        "SEEDSTER",
-        "ShAaNiG",
-        "Sicario",
-        "SP3LL",
-        "SPx",
-        "STUTTERSHIT",
-        "TAoE",
-        "TEKNO3D",
-        "TGALAXY",
-        "TGx",
-        "tokar86a",
-        "TORRENTGALAXY",
-        "ToVaR",
-        "TSP",
-        "TSPxL",
-        "UnKn0wn",
-        "ViSION",
-        "VN_Foxcore",
-        "VXT",
-        "WAF",
-        "WKS",
-        "x0r",
-        "YIFY",
-        "YTS",
-        "YTS.MX",
-        "ZR",
-    )
+    banned_groups = ("",)
     approved_image_hosts = ("imgbox", "imgbb", "onlyimage", "ptscreens")
     image_host_policy = ImageHostPolicy({"ibb.co": "imgbb", "imgbox.com": "imgbox", "onlyimage.org": "onlyimage", "ptscreens.com": "ptscreens"}, approved_image_hosts)
     id_url = f"{base_url}/api/torrents/"
@@ -156,40 +82,14 @@ class SkipTheCommercials(UNIT3D):
                 logger.info(f"{self.tracker}: [bold red]Only TV and documentary movie uploads are allowed at {self.tracker}.[/bold red]")
             return False
 
-        passed = True
         genres = ", ".join(str(value) for value in [*(meta.keywords or []), *combined_genres])
         adult_keywords = ["xxx", "erotic", "porn", "adult", "orgy", "hentai", "adult animation", "softcore"]
         if any(re.search(rf"(^|,\s*){re.escape(keyword)}(\s*,|$)", genres, re.IGNORECASE) for keyword in adult_keywords):
             logger.info(f"{self.tracker}: [bold red]Porn is not allowed at {self.tracker}.[/bold red]")
-            passed = False
+            if not await confirm_override(meta):
+                return False
 
-        if not meta.valid_mi_settings:
-            logger.info(f"{self.tracker}: [bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
-            return False
-
-        language_ok = meta.is_disc in ["BDMV", "DVD"] or await self.common.check_language_requirements(
-            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
-        )
-        return language_ok and passed
-
-    async def get_name(self, meta: Meta) -> dict[str, str]:
-        stc_name = meta.name
-
-        # Non-English audio gets its language ahead of the audio codec; full discs are exempt
-        if meta.is_disc not in ["BDMV", "DVD"]:
-            if not meta.language_checked:
-                await languages_manager.process_desc_language(meta, tracker=self.tracker)
-            audio_languages: list[str] = [] if not meta.audio_languages else meta.audio_languages
-            audio = meta.audio or ""
-            if audio_languages and not await languages_manager.has_english_language(audio_languages):
-                foreign_lang = audio_languages[0].upper()
-                if audio and foreign_lang not in stc_name.upper():
-                    stc_name = stc_name.replace(audio, f"{foreign_lang} {audio}", 1)
-
-        if not str(meta.tag or "").strip("- "):
-            stc_name = f"{stc_name}-NOGROUP"
-
-        return {"name": stc_name}
+        return True
 
     async def get_description(self, meta: Meta) -> dict[str, str]:
         return {
