@@ -65,7 +65,15 @@ def make_meta(tracker: str) -> Meta:
         cast=["Fictional Actor"],
     )
     meta.tmdb_localized_data = {"zh-cn": localized, "pt-BR": localized}
-    meta.imdb_info = {"imdb_url": "https://www.imdb.com/title/tt7654321", "title": "Fictional Film", "year": 2001, "type": "movie", "directors": ["Fictional Director"], "stars": ["Fictional Actor"], "rating": 7.1}
+    meta.imdb_info = {
+        "imdb_url": "https://www.imdb.com/title/tt7654321",
+        "title": "Fictional Film",
+        "year": 2001,
+        "type": "movie",
+        "directors": ["Fictional Director"],
+        "stars": ["Fictional Actor"],
+        "rating": 7.1,
+    }
     meta.mediainfo = {
         "media": {
             "track": [

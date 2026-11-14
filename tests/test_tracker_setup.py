@@ -28,6 +28,21 @@ def test_music_trackers_are_filtered_before_tracker_specific_work():
     assert meta.tracker_status["AITHER"] == {"upload": False, "skipped": True}
 
 
+def test_trackers_without_credentials_are_reported_as_skipped():
+    meta = Meta(category="MOVIE", trackers=["AITHER"])
+    setup = TrackerSetup({"TRACKERS": {"AITHER": {}}})
+
+    setup.filter_unsupported_trackers(meta)
+
+    assert meta.trackers == []
+    assert meta.tracker_status["AITHER"] == {
+        "upload": False,
+        "skipped": True,
+        "status_message": "Missing API key in the tracker configuration",
+        "skip_reason": "not_configured",
+    }
+
+
 def test_cathoderaytube_is_registered_for_supported_categories():
     meta = Meta(category="GAME", trackers=["CATHODERAYTUBE"])
     setup = TrackerSetup({"TRACKERS": {"CATHODERAYTUBE": {"announce_url": "https://signal.cathode-ray.tube/passkey/announce"}}})
@@ -78,75 +93,72 @@ async def test_capybarabr_fetches_banned_groups_with_api_token(tmp_path, monkeyp
     assert json.loads(file_path.read_text(encoding="utf-8"))["banned_groups"] == "BannedGroup, AnotherGroup"
 
 
-class _InfinityHDBannedGroupsResponse:
+class _UlcxBlockedGroupsResponse:
     status_code = 200
 
     def json(self) -> dict[str, Any]:
-        return {
-            "data": [
-                {"name": "YIFY", "all_types": True, "types": [], "type_ids": [], "reason": "Quality."},
-                {"name": "EVO", "all_types": False, "types": ["Full Disc", "Remux", "Encode", "WEBRip", "HDTV"], "type_ids": [1, 2, 3, 5, 6], "reason": "Quality."},
-            ],
-            "meta": {"count": 2, "wiki": "https://infinityhd.net/wikis/5"},
-        }
+        return {"data": [{"name": "FakeGrp", "reason": "Low quality encodes", "created_at": "2026-11-08T08:03:11.000000Z"}], "updated_at": "2026-11-08T08:03:11.000000Z"}
 
 
-class _InfinityHDBannedGroupsClient(_BannedGroupsClient):
-    async def get(self, **kwargs: Any) -> _InfinityHDBannedGroupsResponse:  # type: ignore[override]
+class _UlcxClient:
+    def __init__(self, requests: list[dict[str, Any]], response: Any) -> None:
+        self.requests = requests
+        self.response = response
+
+    async def __aenter__(self) -> _UlcxClient:
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        pass
+
+    async def get(self, **kwargs: Any) -> Any:
         self.requests.append(kwargs)
-        return _InfinityHDBannedGroupsResponse()
+        return self.response
+
+
+class _FailedResponse:
+    status_code = 500
+
+    def json(self) -> dict[str, Any]:
+        return {}
 
 
 @pytest.mark.asyncio
-async def test_infinityhd_fetches_banned_groups_with_bearer_token(tmp_path, monkeypatch: pytest.MonkeyPatch):
+async def test_ulcx_fetches_blocked_groups_with_their_reason(tmp_path, monkeypatch: pytest.MonkeyPatch):
     requests: list[dict[str, Any]] = []
-    monkeypatch.setattr("src.trackersetup.httpx.AsyncClient", lambda: _InfinityHDBannedGroupsClient(requests))
-    monkeypatch.setattr("src.trackersetup.observe_tracker_response", lambda *_: None)
-    setup = TrackerSetup({"TRACKERS": {"INFINITYHD": {"api_key": "test-token"}}})
+    monkeypatch.setattr("src.trackersetup.httpx.AsyncClient", lambda: _UlcxClient(requests, _UlcxBlockedGroupsResponse()))
+    monkeypatch.setattr("src.trackersetup.observe_tracker_response", lambda *_args, **_kwargs: None)
+    notes: list[str] = []
+    monkeypatch.setattr("src.trackersetup.logger.info", lambda message, *_args, **_kwargs: notes.append(str(message)))
+    setup = TrackerSetup({"TRACKERS": {"ULCX": {"api_key": "test-token"}}})
+    meta = Meta(base_dir=str(tmp_path), tag="-FakeGrp", unattended=True)
 
-    file_path = await setup.get_banned_groups(Meta(base_dir=str(tmp_path)), "INFINITYHD")
+    assert await setup.check_banned_group("ULCX", [], meta) is True
 
-    assert len(requests) == 1
-    assert requests[0]["url"] == "https://infinityhd.net/api/banned-groups"
+    assert requests[0]["url"] == "https://upload.cx/api/blocked-groups"
     assert requests[0]["headers"]["Authorization"] == "Bearer test-token"
-    assert file_path == tmp_path / "data" / "banned" / "INFINITYHD_banned_groups.json"
-    assert json.loads(file_path.read_text(encoding="utf-8"))["banned_groups"] == "YIFY, EVO"
+    assert any("Low quality encodes" in note for note in notes)
+    saved = json.loads((tmp_path / "data" / "banned" / "ULCX_banned_groups.json").read_text(encoding="utf-8"))
+    assert saved["banned_groups"] == "FakeGrp"
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("tag", "release_type", "banned"),
-    [
-        ("-EVO", "WEBDL", False),
-        ("-EVO", "ENCODE", True),
-        ("-evo", "REMUX", True),
-        ("-EVO", None, True),
-        ("-YIFY", "WEBDL", True),
-        ("-GOOD", "ENCODE", False),
-    ],
-)
-async def test_infinityhd_banned_groups_follow_the_release_type(tmp_path, monkeypatch: pytest.MonkeyPatch, tag: str, release_type: str | None, banned: bool):
-    requests: list[dict[str, Any]] = []
-    monkeypatch.setattr("src.trackersetup.httpx.AsyncClient", lambda: _InfinityHDBannedGroupsClient(requests))
-    monkeypatch.setattr("src.trackersetup.observe_tracker_response", lambda *_: None)
-    setup = TrackerSetup({"TRACKERS": {"INFINITYHD": {"api_key": "test-token"}}})
-    meta = Meta(base_dir=str(tmp_path), tag=tag, type=release_type, unattended=True)
+async def test_ulcx_falls_back_to_the_built_in_list_when_the_api_fails(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("src.trackersetup.httpx.AsyncClient", lambda: _UlcxClient([], _FailedResponse()))
+    monkeypatch.setattr("src.trackersetup.observe_tracker_response", lambda *_args, **_kwargs: None)
+    setup = TrackerSetup({"TRACKERS": {"ULCX": {"api_key": "test-token"}}})
 
-    # The bundled list bans EVO outright; the API's type scope must win over it.
-    assert await setup.check_banned_group("INFINITYHD", ["EVO"], meta) is banned
+    assert await setup.check_banned_group("ULCX", ["FakeGrp"], Meta(base_dir=str(tmp_path), tag="-FakeGrp", unattended=True)) is True
+    assert await setup.check_banned_group("ULCX", ["FakeGrp"], Meta(base_dir=str(tmp_path), tag="-OtherGrp", unattended=True)) is False
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("answer", "banned"), [(True, False), (False, True)])
-async def test_banned_group_override_asks_through_the_shared_prompt(answer: bool, banned: bool):
-    questions: list[str] = []
+async def test_ulcx_falls_back_to_the_built_in_list_when_the_cache_cannot_be_read(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    async def unwritten_cache(_meta: Meta, _tracker: str) -> Any:
+        return tmp_path / "missing.json"
 
-    async def prompt_yes_no(question: str, default: bool = False) -> bool:
-        assert default is False
-        questions.append(question)
-        return answer
+    setup = TrackerSetup({"TRACKERS": {"ULCX": {"api_key": "test-token"}}})
+    monkeypatch.setattr(setup, "get_banned_groups", unwritten_cache)
 
-    meta = Meta(tag="-ZR", unattended=False)
-
-    assert await TrackerSetup({}).check_banned_group("SKIPTHECOMMERCIALS", ["ZR"], meta, prompt_yes_no=prompt_yes_no) is banned
-    assert questions == ["SKIPTHECOMMERCIALS: ZR is a banned group. Do you want to continue anyway?"]
+    assert await setup.check_banned_group("ULCX", ["FakeGrp"], Meta(base_dir=str(tmp_path), tag="-FakeGrp", unattended=True)) is True
+    assert await setup.check_banned_group("ULCX", [], Meta(base_dir=str(tmp_path), tag="-FakeGrp", unattended=True)) is False
