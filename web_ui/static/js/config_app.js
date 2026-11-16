@@ -1395,6 +1395,7 @@ const trackerNameMap = {
   MIDNIGHTSCENE: "MidnightScene",
   MTEAM: "M-Team",
   NEBULANCE: "Nebulance",
+  NIGHTBLOOM: "Nightbloom",
   NORDICQUALITY: "NordicQuality",
   NZBGEEK: "NZBGeek",
   OLDTOONSWORLD: "OldToonsWorld",
