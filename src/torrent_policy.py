@@ -96,6 +96,8 @@ def _hdbits_validator(stats: TorrentStats) -> bool:
 
 HDBITS_POLICY = TorrentPolicy(validator=_hdbits_validator, piece_size_selector=hdbits_piece_size)
 PASSTHEPOPCORN_POLICY = TorrentPolicy(max_piece_size=16 * MIB)
+# TV Vault refuses torrents with pieces over 16 MiB ("too large for some clients").
+TVVAULT_POLICY = TorrentPolicy(max_piece_size=16 * MIB)
 ANTHELION_POLICY = TorrentPolicy(max_metainfo_size=250 * KIB, required_piece_size=128 * MIB)
 
 

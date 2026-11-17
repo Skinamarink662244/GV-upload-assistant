@@ -22,6 +22,7 @@ from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.mediainfo import strip_report_by_line
 from src.meta import Meta
+from src.torrent_policy import TVVAULT_POLICY
 from src.tracker_images import get_tracker_image_collection
 from src.trackers.common import Common
 
@@ -148,6 +149,8 @@ class TVVault:
     # MOVIE is only for TV movies (TMDb genre "TV Movie"); see get_additional_checks.
     supported_categories = ("TV", "MOVIE")
     banned_groups: tuple[str, ...] = ()
+    # Pieces must be 16 MiB or smaller; larger releases get their own torrent.
+    torrent_policy = TVVAULT_POLICY
     # Show group IDs found by the IMDb search, by release uuid, so the upload goes into the existing show.
     group_ids: ClassVar[dict[str, str]] = {}
     # Seconds between the two searches; the site refuses quick repeats.

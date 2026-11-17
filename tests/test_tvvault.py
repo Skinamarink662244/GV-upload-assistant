@@ -407,3 +407,12 @@ def test_signature_is_left_out_when_turned_off(tmp_path):
     # DEFAULT "ua_signature": False makes upload.py set an empty signature.
     without = asyncio.run(tracker().generate_description(make_meta(base_dir=str(tmp_path), ua_signature="")))
     assert "[align=right]" not in without
+
+
+def test_torrents_use_pieces_of_16_mib_or_less():
+    mib = 1024 * 1024
+    policy = TVVault.torrent_policy
+    assert policy.max_piece_size == 16 * mib
+    # A 2160p season pack that would normally get 32 MiB pieces is capped at 16 MiB.
+    assert policy.choose_piece_size(80 * 1024 * mib, 32 * mib) == 16 * mib
+    assert policy.choose_piece_size(2 * 1024 * mib, 4 * mib) == 4 * mib
