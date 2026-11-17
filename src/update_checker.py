@@ -15,11 +15,11 @@ from typing import cast
 
 from src.app_paths import CODE_DIR, STATE_DIR
 
-REMOTE_VERSION_URL = "https://raw.githubusercontent.com/Skinamarink662244/wastaken-upload-assistant/master/src/version.py"
-RELEASES_URL = "https://github.com/Skinamarink662244/wastaken-upload-assistant/releases"
-RELEASES_API_URL = "https://api.github.com/repos/Skinamarink662244/wastaken-upload-assistant/releases?per_page=100"
-REPOSITORY_URL = "https://github.com/Skinamarink662244/wastaken-upload-assistant"
-COMPARE_API_URL = "https://api.github.com/repos/Skinamarink662244/wastaken-upload-assistant/compare"
+REMOTE_VERSION_URL = "https://raw.githubusercontent.com/Skinamarink662244/GV-upload-assistant/development/src/version.py"
+RELEASES_URL = "https://github.com/Skinamarink662244/GV-upload-assistant/releases"
+RELEASES_API_URL = "https://api.github.com/repos/Skinamarink662244/GV-upload-assistant/releases?per_page=100"
+REPOSITORY_URL = "https://github.com/Skinamarink662244/GV-upload-assistant"
+COMPARE_API_URL = "https://api.github.com/repos/Skinamarink662244/GV-upload-assistant/compare"
 DEVELOPMENT_BRANCH = "development"
 MAX_CHANGELOG_RELEASES = 100
 MAX_UNRELEASED_COMMITS = 100

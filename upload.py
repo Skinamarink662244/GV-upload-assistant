@@ -2537,7 +2537,7 @@ def extract_changelog(content: str, to_version: str) -> str | None:
 
 async def update_notification() -> str:
     version_file = CODE_DIR / "src" / "version.py"
-    remote_version_url = "https://raw.githubusercontent.com/Skinamarink662244/wastaken-upload-assistant/master/src/version.py"
+    remote_version_url = "https://raw.githubusercontent.com/Skinamarink662244/GV-upload-assistant/development/src/version.py"
 
     notice = config["DEFAULT"].get("update_notification", True)
     verbose = config["DEFAULT"].get("verbose_notification", False)
