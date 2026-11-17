@@ -416,3 +416,49 @@ def test_torrents_use_pieces_of_16_mib_or_less():
     # A 2160p season pack that would normally get 32 MiB pieces is capped at 16 MiB.
     assert policy.choose_piece_size(80 * 1024 * mib, 32 * mib) == 16 * mib
     assert policy.choose_piece_size(2 * 1024 * mib, 4 * mib) == 4 * mib
+
+
+WARNING_PAGE = """
+<html><head><title>Warning :: TV Vault</title></head><body>
+<h2>Warning</h2><p>Your torrent has been uploaded; however, you must download your torrent from
+<a href="torrents.php?id=23717">here</a> before you can start seeding.</p></body></html>
+"""
+UPLOAD_FORM_PAGE = '<html><head><title>Upload :: TV Vault</title></head><body><form id="upload_table"></form></body></html>'
+
+
+def test_the_must_download_warning_page_counts_as_success():
+    from src.trackers.GAZELLE.tvvault import SUCCESS_TEXTS
+
+    assert any(text in WARNING_PAGE for text in SUCCESS_TEXTS)
+    assert not any(text in UPLOAD_FORM_PAGE for text in SUCCESS_TEXTS)
+
+
+def test_after_upload_the_sites_own_torrent_is_downloaded():
+    show_page = """
+    <table class="torrent_table">
+      <tr><td><a href="torrents.php?action=download&amp;id=104112&amp;authkey=a&amp;torrent_pass=p">DL</a></td></tr>
+      <tr><td><a href="torrents.php?action=download&amp;id=114489&amp;authkey=a&amp;torrent_pass=p">DL</a></td></tr>
+    </table>
+    """
+
+    async def run():
+        site = tracker()
+        requests: list[httpx.Request] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, text=show_page, request=request)
+
+        site.session = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        site.common.download_tracker_torrent = AsyncMock(return_value="[TVVAULT].torrent")
+        item = make_meta(tracker_status={"TVVAULT": {"torrent_id": "23717"}})
+        ok = await site._download_site_torrent(item)
+        await site.session.aclose()
+        return ok, requests, site.common.download_tracker_torrent.await_args, item.tracker_status["TVVAULT"]
+
+    ok, requests, call, status = asyncio.run(run())
+    assert ok
+    assert dict(requests[0].url.params) == {"id": "23717"}
+    # The newest torrent on the show page is the one just uploaded.
+    assert call.kwargs["downurl"] == "https://tv-vault.me/torrents.php?action=download&id=114489&authkey=a&torrent_pass=p"
+    assert status["torrent_link"] == "https://tv-vault.me/torrents.php?id=23717&torrentid=114489"

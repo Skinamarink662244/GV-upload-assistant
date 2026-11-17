@@ -125,6 +125,14 @@ TAGS_BY_GENRE = {
     "western": ("western",),
 }
 
+# Text on the page TV Vault returns after a successful upload.
+SUCCESS_TEXTS = [
+    "action=download&amp;id=",
+    "action=download&id=",
+    # Gazelle's "Warning" page when it changed the torrent: "uploaded; however, you must download your torrent".
+    "you must download your torrent",
+]
+
 # HD resolutions that are added to the season / episode label.
 HD_RESOLUTIONS = ("720p", "1080i", "1080p", "2160p", "4320p")
 
@@ -731,7 +739,7 @@ class TVVault:
             )
             return False
 
-        return await self.cookie_auth_uploader.handle_upload(
+        uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -741,6 +749,52 @@ class TVVault:
             upload_cookies=self.session.cookies,
             upload_url=self.upload_url,
             id_pattern=r"torrents\.php\?id=(\d+)",
-            # A successful upload lands on the show page, which has download links; a failed one shows the form again.
-            success_list=["action=download&amp;id=", "action=download&id="],
+            # Success is either the show page (which has download links) or the "Warning" page saying the torrent
+            # was uploaded but has to be downloaded again; a failed upload shows the form again.
+            success_list=SUCCESS_TEXTS,
         )
+        if uploaded and not meta.debug and not await self._download_site_torrent(meta):
+            logger.warning(
+                f"{self.tracker}: [yellow]Uploaded, but TV Vault's own .torrent could not be downloaded. Download it from the torrent page "
+                "and add it to your client to seed; the file Upload Assistant made may not match.[/yellow]"
+            )
+        return uploaded
+
+    @staticmethod
+    def _download_links(html: str) -> list[tuple[int, str]]:
+        """(torrent id, href) for every download link on a show page."""
+        links: list[tuple[int, str]] = []
+        for link in BeautifulSoup(html, "html.parser").select('a[href*="action=download"]'):
+            href = str(link.get("href", ""))
+            if match := re.search(r"[?&]id=(\d+)", href):
+                links.append((int(match.group(1)), href))
+        return links
+
+    async def _download_site_torrent(self, meta: Meta) -> bool:
+        """Replace Upload Assistant's .torrent with TV Vault's copy, which is the one to seed.
+
+        TV Vault can change the file during upload ("you must download your torrent ... before
+        you can start seeding"), so only its copy has the infohash the tracker knows. The newest
+        torrent on the show page is the one just uploaded.
+        """
+        status = meta.tracker_status.setdefault(self.tracker, {})
+        group_id = str(status.get("torrent_id") or self.group_ids.get(str(meta.uuid), ""))
+        if not group_id.isdigit():
+            return False
+        try:
+            await asyncio.sleep(self.search_delay)
+            response = await self.session.get(f"{self.base_url}/torrents.php", params={"id": group_id})
+            response.raise_for_status()
+        except httpx.HTTPError as error:
+            logger.warning(f"{self.tracker}: could not open the show page to download the torrent: {error}")
+            return False
+        links = self._download_links(response.text)
+        if not links:
+            return False
+        torrent_id, href = max(links)
+        downloaded = await self.common.download_tracker_torrent(meta, self.tracker, headers=dict(self.session.headers), downurl=str(httpx.URL(str(response.url)).join(href)))
+        if not downloaded:
+            return False
+        status["torrent_link"] = f"{self.base_url}/torrents.php?id={group_id}&torrentid={torrent_id}"
+        logger.info(f"{self.tracker}: downloaded TV Vault's .torrent for seeding (torrent {torrent_id}).")
+        return True
