@@ -123,6 +123,12 @@ TAGS_BY_GENRE = {
     "western": ("western",),
 }
 
+# HD resolutions that are added to the season / episode label.
+HD_RESOLUTIONS = ("720p", "1080i", "1080p", "2160p", "4320p")
+
+# TV Vault staff ask for 1-3 full-size screenshots.
+DEFAULT_SCREENSHOT_COUNT = 3
+
 # Countries whose shows are labelled "Series N" rather than "Season N".
 SERIES_COUNTRIES = {"GB", "UK", "IE"}
 
@@ -246,7 +252,14 @@ class TVVault:
         return sorted({int(ep["episode_number"]) for ep in episodes if _is_str_dict(ep) and str(ep.get("episode_number") or "").isdigit()})
 
     def get_season_title(self, meta: Meta) -> str:
-        """The "Season (or Series) / Episode" field, following the site's upload rules:
+        """The "Season (or Series) / Episode" field, with " (1080p)" or " (720p)" added for HD
+        releases, as TV Vault's staff ask (e.g. "Season 1 (1080p)")."""
+        title = self._season_title_without_resolution(meta)
+        resolution = str(meta.resolution or "").strip().lower()
+        return f"{title} ({resolution})" if resolution in HD_RESOLUTIONS else title
+
+    def _season_title_without_resolution(self, meta: Meta) -> str:
+        """The season / episode label from the site's upload rules:
         "Series 1", "Season 1, Episode 01: Name", "Season 1, Episode 01-04, 07",
         "Season 1 (Missing Episode 14, 17)", "Miniseries" or "TV Movie".
         """
@@ -447,6 +460,14 @@ class TVVault:
 
     # ----- description ---------------------------------------------------------
 
+    def _screenshot_count(self) -> int:
+        tracker_config = self.config.get("TRACKERS", {}).get(self.tracker, {})
+        try:
+            count = int(tracker_config.get("image_count", DEFAULT_SCREENSHOT_COUNT))
+        except TypeError, ValueError:
+            count = DEFAULT_SCREENSHOT_COUNT
+        return max(count, 1)
+
     async def _full_mediainfo(self, meta: Meta, builder: DescriptionBuilder) -> str:
         """TV Vault requires the full MediaInfo output for a representative file."""
         mi_path = Path(meta.base_dir) / "tmp" / meta.uuid / "MEDIAINFO_CLEANPATH.txt"
@@ -472,11 +493,12 @@ class TVVault:
         elif media_info := await self._full_mediainfo(meta, builder):
             sections.append(f"[mediainfo]\n{media_info}\n[/mediainfo]")
 
+        # Full-size images (raw_url, not thumbnails), at most image_count of them.
         screenshots = [
             str(image["raw_url"])
             for image in get_tracker_image_collection(meta, self.tracker, "screenshots")
             if _is_str_dict(image) and isinstance(image.get("raw_url"), str) and image["raw_url"]
-        ]
+        ][: self._screenshot_count()]
         if screenshots:
             sections.append("\n".join(f"[img]{url}[/img]" for url in screenshots))
 

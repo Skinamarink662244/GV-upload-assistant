@@ -344,3 +344,25 @@ def test_same_name_show_without_imdb_match_blocks_the_upload_until_renamed():
     assert blocked is False
     assert "already on TV Vault" in message
     assert allowed is True
+
+
+# ----- staff feedback: resolution in the name, 1-3 full-size screenshots -----
+
+
+def test_hd_releases_carry_their_resolution_in_the_name():
+    site = tracker()
+    assert site.get_season_title(make_meta(resolution="1080p")) == "Season 1 (1080p)"
+    assert site.get_season_title(make_meta(resolution="720p", tv_pack=False, episode="E01", episode_int=1, episode_title="Pilot")) == "Season 1, Episode 01: Pilot (720p)"
+    assert site.get_season_title(make_meta(resolution="576p")) == "Season 1"
+    assert asyncio.run(site.get_name(make_meta(resolution="1080p"))) == "Almost Grown - Season 1 (1080p) (1988)"
+
+
+def test_description_keeps_at_most_three_full_size_screenshots(tmp_path):
+    images = [{"raw_url": f"https://i.example/full{n}.png", "img_url": f"https://i.example/thumb{n}.png"} for n in range(1, 7)]
+    description = asyncio.run(tracker().generate_description(make_meta(base_dir=str(tmp_path), image_list=images)))
+    assert description.count("[img]") == 3
+    assert "[img]https://i.example/full3.png[/img]" in description
+    assert "thumb" not in description
+
+    one = TVVault({"DEFAULT": {}, "TRACKERS": {"TVVAULT": {"image_count": 1}}})
+    assert asyncio.run(one.generate_description(make_meta(base_dir=str(tmp_path), image_list=images))).count("[img]") == 1

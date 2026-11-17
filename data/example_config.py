@@ -3562,6 +3562,8 @@ config: dict[str, Any] = {
             # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
             # Your personal announce URL, shown at the top of https://tv-vault.me/upload.php
             "announce_url": "",
+            # Full-size screenshots in the torrent info; staff say 1-3 is fine
+            "image_count": 3,
         },
         "ULCX": {
             "cli_alias": "ULCX",
