@@ -371,7 +371,8 @@ class CathodeRayTube:
             if media_info:
                 sections.append(f"[details]\n[mediainfo]\n{media_info}\n[/mediainfo]\n[/details]")
 
-        sections.append(f"\n[align=right][url=https://github.com/Skinamarink662244/wastaken-upload-assistant][size=0]{meta.ua_signature}[/size][/url][/align]")
+        if meta.ua_signature:
+            sections.append(f"\n[align=right][url=https://github.com/Skinamarink662244/wastaken-upload-assistant][size=0]{meta.ua_signature}[/size][/url][/align]")
 
         description_str: str = "\n".join(part for part in sections if part.strip())
 

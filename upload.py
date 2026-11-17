@@ -3029,6 +3029,9 @@ async def do_the_thing(base_dir: str) -> None:
     if meta.current_version:
         signature += f" {meta.current_version}"
     signature += " (fork)"
+    # DEFAULT "ua_signature": False leaves the line out of every description.
+    if str(config["DEFAULT"].get("ua_signature", True)).strip().lower() in ("false", "0", "no", "off"):
+        signature = ""
     meta.ua_signature = signature
     meta.base_dir = base_dir
 

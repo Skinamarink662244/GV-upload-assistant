@@ -366,3 +366,11 @@ def test_description_keeps_at_most_three_full_size_screenshots(tmp_path):
 
     one = TVVault({"DEFAULT": {}, "TRACKERS": {"TVVAULT": {"image_count": 1}}})
     assert asyncio.run(one.generate_description(make_meta(base_dir=str(tmp_path), image_list=images))).count("[img]") == 1
+
+
+def test_signature_is_left_out_when_turned_off(tmp_path):
+    with_signature = asyncio.run(tracker().generate_description(make_meta(base_dir=str(tmp_path))))
+    assert "Upload-Assistant" in with_signature
+    # DEFAULT "ua_signature": False makes upload.py set an empty signature.
+    without = asyncio.run(tracker().generate_description(make_meta(base_dir=str(tmp_path), ua_signature="")))
+    assert "[align=right]" not in without

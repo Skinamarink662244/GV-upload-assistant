@@ -458,6 +458,9 @@ config: dict[str, Any] = {
         # Custom signature added to the bottom of the description.
         # Can be overridden per tracker by adding the same setting to its configuration.
         "custom_signature": "",
+        # Add the "Shared with Upload-Assistant" line to the bottom of descriptions.
+        # Set to False to leave it out on every tracker.
+        "ua_signature": True,
         # Override description presentation settings for specific release groups. Tags are matched
         # case-insensitively, with or without their leading hyphen.
         # Per-tracker tag_overrides take precedence over these DEFAULT overrides.

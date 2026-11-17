@@ -393,7 +393,8 @@ class BEYONDHD:
                     else:
                         await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url] ")
                 await desc.write("[/align]")
-            await desc.write(f"\n[align=right][url=https://github.com/Skinamarink662244/wastaken-upload-assistant][size=10]{meta.ua_signature}[/size][/url][/align]")
+            if meta.ua_signature:
+                await desc.write(f"\n[align=right][url=https://github.com/Skinamarink662244/wastaken-upload-assistant][size=10]{meta.ua_signature}[/size][/url][/align]")
             await desc.close()
             return
 

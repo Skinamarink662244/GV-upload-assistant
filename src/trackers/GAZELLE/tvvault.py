@@ -502,7 +502,8 @@ class TVVault:
         if screenshots:
             sections.append("\n".join(f"[img]{url}[/img]" for url in screenshots))
 
-        sections.append(f"[align=right][size=1]{meta.ua_signature}[/size][/align]")
+        if meta.ua_signature:
+            sections.append(f"[align=right][size=1]{meta.ua_signature}[/size][/align]")
         description = "\n\n".join(section for section in sections if section.strip())
 
         if meta.debug:
