@@ -1433,6 +1433,7 @@ const trackerNameMap = {
   TORRENTHAVEN: "TorrentHaven",
   TORRENTLEECH: "TorrentLeech",
   TVCHAOSUK: "TV Chaos UK",
+  TVVAULT: "TV Vault",
   ULCX: "ULCX",
   SUIO: "Suio",
   UTOPIA: "UTOPIA",

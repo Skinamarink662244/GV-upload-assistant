@@ -607,7 +607,7 @@ config: dict[str, Any] = {
         #   LUMINARR, MAKINGOFF, MIDNIGHTSCENE, MTEAM, NEBULANCE, NORDICQUALITY, NZBGEEK, NZBNEST, OLDTOONSWORLD, ONLYENCODES, ORPHEUS, PASSTHEPOPCORN,
         #   PEERGARDEN, POLISHTORRENT, PORTUGAS, PRIVATEHD, PTCAFE, PTERCLUB, PTFANS, PTGTK, PTSKIT, PTZONE, QINGWA, RACING4EVERYONE, RAILGUNPT,
         #   RASTASTUGAN, REELFLIX, RETROFLIX, RETROMOVIESCLUB, ROCKETHD, SAMARITANO, SEEDPOOL, SHAREISLAND, SIMURG, SKIPTHECOMMERCIALS, SPEEDAPP,
-        #   SUIO, SWARMAZON, THELEACHZONE, THEOLDSCHOOL, TORRENTEROS, TORRENTHAVEN, TORRENTHR, TORRENTLEECH, TOTHEGLORY, TVCHAOSUK, ULCX, UTOPIA,
+        #   SUIO, SWARMAZON, THELEACHZONE, THEOLDSCHOOL, TORRENTEROS, TORRENTHAVEN, TORRENTHR, TORRENTLEECH, TOTHEGLORY, TVCHAOSUK, TVVAULT, ULCX, UTOPIA,
         #   VIETMEDIAF, VULTU, XINGYUNGEPT, YUSCENE, ZENITH, ZMPT
         # This list is validated against the tracker blocks below by the test suite.
         # Only add the trackers you want to upload to on a regular basis
@@ -3546,6 +3546,13 @@ config: dict[str, Any] = {
             "announce_url": "",
             "anon": False,
             "modq": False,
+        },
+        "TVVAULT": {
+            "cli_alias": "TVV",
+            # Cookies required (export from https://tv-vault.me/ to data/cookies/TVVAULT.txt).
+            # See: https://github.com/wastaken7/Upload-Assistant/blob/development/docs/example-config.md#how-to-export-cookies
+            # Your personal announce URL, shown at the top of https://tv-vault.me/upload.php
+            "announce_url": "",
         },
         "ULCX": {
             "cli_alias": "ULCX",

@@ -596,6 +596,7 @@
     "torrentleech",
     "totheglory",
     "tvchaosuk",
+    "tvvault",
   ]);
   const UA_CORE_SCOPES = new Set([
     "api",
