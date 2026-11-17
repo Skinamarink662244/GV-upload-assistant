@@ -6,6 +6,7 @@ in the site's own upload form (upload.php). Field names and allowed values are
 taken from that form, and naming follows the site's upload rules.
 """
 
+import asyncio
 import platform
 import re
 from pathlib import Path
@@ -149,6 +150,8 @@ class TVVault:
     banned_groups: tuple[str, ...] = ()
     # Show group IDs found by the IMDb search, by release uuid, so the upload goes into the existing show.
     group_ids: ClassVar[dict[str, str]] = {}
+    # Seconds between the two searches; the site refuses quick repeats.
+    search_delay: float = 3.0
     # Releases whose show title matches a different show already on the site, by release uuid.
     show_conflicts: ClassVar[dict[str, str]] = {}
 
@@ -581,7 +584,8 @@ class TVVault:
         data.setdefault("subtitles", "")
         data.setdefault("commentary", "")
         deferred = {"release_desc": payload_preview.DESCRIPTION_NOTE}
-        return payload_preview.describe(self.tracker, data, specs, deferred=deferred, name_key="show")
+        # Show the full TV Vault name ("Show - Season 1 (1080p) (2019)"), not just the show field.
+        return payload_preview.describe(self.tracker, data, specs, deferred=deferred, name_key="show", name=await self.get_name(meta))
 
     async def get_additional_checks(self, meta: Meta) -> bool:
         """Enforce the TV Vault upload rules that can be checked from the release."""
@@ -665,7 +669,16 @@ class TVVault:
         results: list[dict[str, str]] = []
         seen: set[str] = set()
         for index, params in enumerate(searches):
+            # Once the IMDb search has found the show, a name search adds nothing.
+            if "searchstr" in params and uuid in TVVault.group_ids:
+                break
+            if index:
+                # TV Vault refuses searches made in quick succession.
+                await asyncio.sleep(self.search_delay)
             response = await self.session.get(f"{self.base_url}/torrents.php", params=params)
+            if index and response.status_code in (403, 429, 503):
+                logger.warning(f"{self.tracker}: [yellow]TV Vault refused the search by show name (HTTP {response.status_code}); using the IMDb search results.[/yellow]")
+                break
             response.raise_for_status()
             if "login.php" in str(response.url) or 'id="loginform"' in response.text:
                 raise RuntimeError(f"{self.tracker}: [yellow]Could not search; the cookies may have expired. Export them again.[/yellow]")

@@ -11,7 +11,9 @@ from src.trackers.GAZELLE.tvvault import TVVault
 
 
 def tracker() -> TVVault:
-    return TVVault({"DEFAULT": {}, "TRACKERS": {"TVVAULT": {"announce_url": "http://tracker.tv-vault.me:34000/key/announce"}}})
+    site = TVVault({"DEFAULT": {}, "TRACKERS": {"TVVAULT": {"announce_url": "http://tracker.tv-vault.me:34000/key/announce"}}})
+    site.search_delay = 0
+    return site
 
 
 def make_meta(**overrides: Any) -> Meta:
@@ -216,8 +218,8 @@ def test_search_finds_the_show_group_and_same_season_torrents():
         return requests, results
 
     requests, results = asyncio.run(run())
-    assert dict(requests[0].url.params) == {"imdbid": "tt0094414", "disablegrouping": "1"}
-    assert dict(requests[1].url.params) == {"searchstr": "Almost Grown", "disablegrouping": "1"}
+    # The IMDb search found the show, so no second (name) search is made.
+    assert [dict(request.url.params) for request in requests] == [{"imdbid": "tt0094414", "disablegrouping": "1"}]
     assert TVVault.group_ids["tvv-test"] == "25455"
     assert results == [
         {
@@ -226,6 +228,37 @@ def test_search_finds_the_show_group_and_same_season_torrents():
             "link": "https://tv-vault.me/torrents.php?id=25455&torrentid=104112",
         }
     ]
+
+
+def test_name_search_runs_when_imdb_finds_nothing_and_a_refusal_is_not_an_error():
+    async def run(name_status: int):
+        site = tracker()
+        site.cookie_validator.load_session_cookies = AsyncMock(return_value=httpx.Cookies({"session": "test"}))
+        requests: list[httpx.Request] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if "imdbid" in request.url.params:
+                return httpx.Response(200, text='<table id="torrent_table"></table>', request=request)
+            return httpx.Response(name_status, text=SEARCH_HTML, request=request)
+
+        site.session = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        results = await site.search_existing(make_meta())
+        await site.session.aclose()
+        return requests, results
+
+    requests, results = asyncio.run(run(200))
+    assert dict(requests[1].url.params) == {"searchstr": "Almost Grown", "disablegrouping": "1"}
+    assert len(results) == 1
+
+    requests, results = asyncio.run(run(403))
+    assert len(requests) == 2
+    assert results == []
+
+
+def test_preview_shows_the_full_tv_vault_name():
+    preview = asyncio.run(tracker().get_payload_preview(make_meta(resolution="2160p", year=2019, first_air_date="2019-06-02")))
+    assert preview.name == "Almost Grown - Season 1 (2160p) (2019)"
 
 
 def test_search_reports_expired_cookies():
