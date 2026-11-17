@@ -3,7 +3,7 @@
 
 TV Vault has no API, so this logs in with exported browser cookies and fills
 in the site's own upload form (upload.php). Field names and allowed values are
-taken from that form.
+taken from that form, and naming follows the site's upload rules.
 """
 
 import platform
@@ -119,6 +119,7 @@ TAGS_BY_GENRE = {
     "soap": ("soap",),
     "talk": ("chatshow",),
     "thriller": ("thriller",),
+    "tv movie": ("tv.movie",),
     "western": ("western",),
 }
 
@@ -137,10 +138,13 @@ class TVVault:
     upload_url = f"{base_url}/upload.php"
     torrent_url = f"{base_url}/torrents.php?id="
     tracker_urls = ("tracker.tv-vault.me",)
-    supported_categories = ("TV",)
+    # MOVIE is only for TV movies (TMDb genre "TV Movie"); see get_additional_checks.
+    supported_categories = ("TV", "MOVIE")
     banned_groups: tuple[str, ...] = ()
     # Show group IDs found by the IMDb search, by release uuid, so the upload goes into the existing show.
     group_ids: ClassVar[dict[str, str]] = {}
+    # Releases whose show title matches a different show already on the site, by release uuid.
+    show_conflicts: ClassVar[dict[str, str]] = {}
 
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
@@ -168,6 +172,28 @@ class TVVault:
         if isinstance(genres, str):
             genres = genres.split(",")
         return [str(genre).strip().lower() for genre in genres or [] if str(genre).strip()]
+
+    @staticmethod
+    def _is_latin(text: str) -> bool:
+        """True when every letter is Latin script (accents allowed), so it can be typed into a search box."""
+        return all(ord(char) <= 0x24F or not char.isalpha() for char in text)
+
+    @classmethod
+    def get_show_title(cls, meta: Meta) -> str:
+        """The show's full name. Shows first made in another language lead with the original
+        title and add the English one as " (aka English Title)", unless the original is in a
+        non-Latin script, which the rules ask to romanize instead.
+        """
+        title = str(meta.title or "").strip()
+        original = str(meta.original_title or "").strip()
+        language = str(meta.original_language or "").lower()
+        if original and language and not language.startswith("en") and original.casefold() != title.casefold() and cls._is_latin(original):
+            return f"{original} (aka {title})" if title else original
+        return title
+
+    @staticmethod
+    def _is_tv_movie(meta: Meta) -> bool:
+        return str(meta.category).upper() == "MOVIE"
 
     @staticmethod
     def _season_word(meta: Meta) -> str:
@@ -211,14 +237,34 @@ class TVVault:
                 return name
         return ""
 
+    @staticmethod
+    def _season_episode_count(meta: Meta) -> list[int]:
+        season = meta.tmdb_season_data if _is_str_dict(meta.tmdb_season_data) else {}
+        episodes = season.get("episodes")
+        if not isinstance(episodes, list):
+            return []
+        return sorted({int(ep["episode_number"]) for ep in episodes if _is_str_dict(ep) and str(ep.get("episode_number") or "").isdigit()})
+
     def get_season_title(self, meta: Meta) -> str:
-        """The "Season (or Series) / Episode" field, e.g. "Series 1, Episode 01: Pilot" or "Season 2"."""
+        """The "Season (or Series) / Episode" field, following the site's upload rules:
+        "Series 1", "Season 1, Episode 01: Name", "Season 1, Episode 01-04, 07",
+        "Season 1 (Missing Episode 14, 17)", "Miniseries" or "TV Movie".
+        """
+        if self._is_tv_movie(meta):
+            return "TV Movie"
+
         season = int(meta.season_int or 0)
         label = "Specials" if season == 0 else f"{self._season_word(meta)} {season}"
 
         if meta.tv_pack:
             if meta.season_pack_incomplete and (episodes := self._episodes_in_files(meta)):
+                missing = sorted(set(self._season_episode_count(meta)) - set(episodes))
+                # Nearly complete seasons list what is missing rather than what is there.
+                if missing and len(missing) < len(episodes):
+                    return f"{label} (Missing Episode {self.compact_numbers(missing)})"
                 return f"{label}, Episode {self.compact_numbers(episodes)}"
+            if season == 1 and str(meta.tmdb_type or "").lower() == "miniseries":
+                return "Miniseries"
             return label
 
         episodes = self._episode_numbers(meta)
@@ -258,7 +304,7 @@ class TVVault:
         if meta.manual_name is not None:
             return meta.manual_name.strip()
         year = self.get_year(meta)
-        return f"{meta.title} - {self.get_season_title(meta)}{f' ({year})' if year else ''}"
+        return f"{self.get_show_title(meta)} - {self.get_season_title(meta)}{f' ({year})' if year else ''}"
 
     # ----- rip specifics -----------------------------------------------------
 
@@ -283,7 +329,8 @@ class TVVault:
             return "VOB/IFO"
         if meta.is_disc == "BDMV":
             return "m2ts/bdmv"
-        by_extension = {".mkv": "MKV", ".mp4": "MP4", ".m4v": "MP4", ".avi": "AVI", ".ts": "TS", ".m2ts": "TS", ".mpg": "MPG", ".mpeg": "MPG"}
+        # A broadcast .ts that hasn't been remuxed is "TS"; Blu-ray .m2ts files are "m2ts/bdmv".
+        by_extension = {".mkv": "MKV", ".mp4": "MP4", ".m4v": "MP4", ".avi": "AVI", ".ts": "TS", ".m2ts": "m2ts/bdmv", ".mpg": "MPG", ".mpeg": "MPG", ".vob": "VOB/IFO"}
         found = {
             by_extension.get(Path(str(item)).suffix.lower(), "Other")
             for item in meta.filelist or []
@@ -294,6 +341,9 @@ class TVVault:
         return found.pop() if len(found) == 1 else "Multiple"
 
     def get_video_format(self, meta: Meta) -> str:
+        # By definition a full DVD is MPEG-2 video.
+        if meta.is_disc == "DVD":
+            return "MPEG-2"
         video = self._mediainfo_tracks(meta, "Video")
         codec_id = str(video[0].get("CodecID", "")).lower() if video else ""
         if "xvid" in codec_id:
@@ -327,8 +377,8 @@ class TVVault:
             (("aac",), "AAC"),
             (("flac",), "FLAC"),
             (("pcm",), "(L)PCM"),
-            (("mp3",), "MP3"),
-            (("mp2",), "MP2"),
+            (("mp3", "layer 3"), "MP3"),
+            (("mp2", "layer 2"), "MP2"),
             (("opus",), "Opus"),
             (("vorbis",), "Vorbis"),
         ):
@@ -337,8 +387,18 @@ class TVVault:
         return "Unknown" if not audio else "Other"
 
     @staticmethod
-    def get_media(meta: Meta) -> str:
+    def _is_youtube(meta: Meta) -> bool:
+        return str(meta.service or "").upper() == "YT"
+
+    @classmethod
+    def get_media(cls, meta: Meta) -> str:
+        """The rip's source. "VHS" and "DVD" mean commercial releases (home recordings are "TV"),
+        and "Master" is only for studio masters, so neither is guessed beyond what the release says.
+        """
         release = f"{meta.type or ''} {meta.source or ''}".lower().replace("-", "").replace(" ", "")
+        # YouTube is not "Web": its real source is usually TV or DVD, which only the uploader knows.
+        if cls._is_youtube(meta):
+            return "Unknown"
         if "web" in release:
             return "Web"
         if "hddvd" in release:
@@ -436,11 +496,12 @@ class TVVault:
         """Build TV Vault's upload form. A ``preview`` leaves out the description, which needs the screenshots."""
         group_id = self.group_ids.get(str(meta.uuid), "")
         tvdb_id = meta.tvdb_id or meta.tvdb
+        movie = self._is_tv_movie(meta)
         data = {
             "submit": "true",
             "groupid": group_id,
             "type": self.get_category(meta),
-            "show": str(meta.title or "").strip(),
+            "show": self.get_show_title(meta),
             "title": self.get_season_title(meta),
             "year": self.get_year(meta),
             # Only asked for when the show is new to the site.
@@ -455,11 +516,11 @@ class TVVault:
             "imdb_link": str(meta.imdb_tt or ""),
             "wiki_link": "",
             "rt_link": "",
-            "rt_link_type": "tv",
+            "rt_link_type": "m" if movie else "tv",
             "tvtropes_link": "",
-            "tvtropes_link_type": "Series",
+            "tvtropes_link_type": "Film" if movie else "Series",
             "tvdb_link": str(tvdb_id) if tvdb_id else "",
-            "tvdb_link_type": "series",
+            "tvdb_link_type": "movies" if movie else "series",
             "show_desc": str(meta.overview or meta.overview_meta or "").strip(),
             "release_desc": "" if preview else await self.generate_description(meta),
         }
@@ -500,10 +561,24 @@ class TVVault:
         return payload_preview.describe(self.tracker, data, specs, deferred=deferred, name_key="show")
 
     async def get_additional_checks(self, meta: Meta) -> bool:
-        """TV Vault requires full MediaInfo with every video upload."""
+        """Enforce the TV Vault upload rules that can be checked from the release."""
+        if self._is_tv_movie(meta) and "tv movie" not in self._genres(meta):
+            logger.warning(f"{self.tracker}: [red]TV Vault takes TV movies only, and TMDb doesn't list this film as a TV Movie.[/red]")
+            return False
+
         if meta.valid_mi is False:
             logger.warning(f"{self.tracker}: [red]Invalid MediaInfo; TV Vault requires full MediaInfo output.[/red]")
             return False
+
+        # HEVC/H.265 is only accepted for 2160p and larger.
+        if self.get_video_format(meta) == "H.265":
+            height = int(match.group(1)) if (match := re.match(r"(\d{3,4})", str(meta.resolution or ""))) else 0
+            if height < 2160:
+                logger.warning(f"{self.tracker}: [red]H.265/HEVC is only allowed for 2160p and larger; this release is {meta.resolution or 'unknown'}.[/red]")
+                return False
+
+        if self._is_youtube(meta):
+            logger.warning(f"{self.tracker}: [yellow]YouTube isn't a 'Web' source on TV Vault. Source is set to Unknown; change it to TV or DVD if you know which.[/yellow]")
         return True
 
     # ----- duplicate search --------------------------------------------------------
@@ -538,8 +613,10 @@ class TVVault:
             results.append({"name": self._row_name(row), "size": self._row_size(row), "link": str(httpx.URL(page_url).join(href))})
         return results
 
-    @staticmethod
-    def _same_season(name: str, meta: Meta) -> bool:
+    @classmethod
+    def _same_season(cls, name: str, meta: Meta) -> bool:
+        if cls._is_tv_movie(meta):
+            return "tv movie" in name.lower()
         season = int(meta.season_int or 0)
         if season == 0:
             return "special" in name.lower()
@@ -557,6 +634,11 @@ class TVVault:
             searches.append({"imdbid": meta.imdb_tt, "disablegrouping": "1"})
         searches.append({"searchstr": str(meta.title), "disablegrouping": "1"})
 
+        uuid = str(meta.uuid)
+        TVVault.group_ids.pop(uuid, None)
+        TVVault.show_conflicts.pop(uuid, None)
+        our_titles = {name.casefold() for name in (str(meta.title or ""), self.get_show_title(meta)) if name}
+
         results: list[dict[str, str]] = []
         seen: set[str] = set()
         for index, params in enumerate(searches):
@@ -569,8 +651,20 @@ class TVVault:
             if index == 0 and meta.imdb_tt and rows:
                 group = re.search(r"[?&]id=(\d+)", rows[0]["link"])
                 if group:
-                    TVVault.group_ids[str(meta.uuid)] = group.group(1)
+                    TVVault.group_ids[uuid] = group.group(1)
                     logger.info(f"{self.tracker}: show already exists (group {group.group(1)}); the upload will be added to it.")
+            elif uuid not in TVVault.group_ids:
+                # The show isn't on the site under this IMDb ID, but another show may already use its name.
+                for row in rows:
+                    existing = row["name"].split(" - ", 1)[0].strip()
+                    if existing.casefold() in our_titles:
+                        TVVault.show_conflicts[uuid] = existing
+                        logger.warning(
+                            f"{self.tracker}: [yellow]'{existing}' is already on TV Vault without this IMDb ID. If it's a different show, "
+                            "the rules ask you to make the title unique, e.g. add ' (US)', the genre, or the first-broadcast year. "
+                            "If it's the same show, add the IMDb link to its show page instead.[/yellow]"
+                        )
+                        break
             for row in rows:
                 if row["link"] in seen or not self._same_season(row["name"], meta):
                     continue
@@ -586,6 +680,17 @@ class TVVault:
             meta.tracker_status[self.tracker]["status_message"] = "data error: No TV Vault cookies found. Export them to data/cookies/TVVAULT.txt."
             return False
         self.session.cookies = cast(Any, cookie_jar)
+
+        # Don't create a second show with the same name; the user has to make the title unique first.
+        conflict = self.show_conflicts.get(str(meta.uuid))
+        edits = cast(dict[str, dict[str, Any]], getattr(meta, "payload_edits", None) or {}).get(self.tracker) or {}
+        if conflict and not str(edits.get("show") or "").strip():
+            meta.tracker_status[self.tracker]["status_message"] = (
+                f"data error: A show called '{conflict}' is already on TV Vault but doesn't match this IMDb ID. "
+                "Change the Show title to something unique (e.g. add ' (US)' or the year) in the Web UI, "
+                "or add the IMDb link to the existing show page if it's the same show."
+            )
+            return False
 
         return await self.cookie_auth_uploader.handle_upload(
             meta=meta,

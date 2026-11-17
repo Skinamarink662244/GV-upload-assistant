@@ -51,8 +51,10 @@ def make_meta(**overrides: Any) -> Meta:
 @pytest.fixture(autouse=True)
 def clear_group_ids():
     TVVault.group_ids.clear()
+    TVVault.show_conflicts.clear()
     yield
     TVVault.group_ids.clear()
+    TVVault.show_conflicts.clear()
 
 
 def test_compacts_episode_lists_like_the_site():
@@ -248,3 +250,97 @@ def test_preview_lists_the_editable_fields():
     preview = asyncio.run(tracker().get_payload_preview(make_meta()))
     keys = {field.key for field in preview.fields}
     assert {"type", "show", "title", "container", "format", "aformat", "media", "tags"} <= keys
+
+
+# ----- upload rules (rules.php?p=upload) ---------------------------------------
+
+
+def test_show_title_leads_with_the_original_name_and_an_aka():
+    site = tracker()
+    assert site.get_show_title(make_meta()) == "Almost Grown"
+    french = make_meta(title="The Returned", original_title="Les Revenants", original_language="fr")
+    assert site.get_show_title(french) == "Les Revenants (aka The Returned)"
+    # Non-Latin originals should be romanized, which UA can't do, so the English title stays.
+    assert site.get_show_title(make_meta(title="Midnight Diner", original_title="深夜食堂", original_language="ja")) == "Midnight Diner"
+    assert site.get_show_title(make_meta(original_title="Almost Grown", original_language="en")) == "Almost Grown"
+
+
+def test_nearly_complete_seasons_list_the_missing_episodes():
+    season = {"episodes": [{"episode_number": n} for n in range(1, 18)]}
+    have = [n for n in range(1, 18) if n not in (14, 17)]
+    nearly = make_meta(season_pack_incomplete=True, tmdb_season_data=season, filelist=[f"Show.S01E{n:02d}.mkv" for n in have])
+    assert tracker().get_season_title(nearly) == "Season 1 (Missing Episode 14, 17)"
+    # With most episodes missing, the episodes that are there are listed instead.
+    sparse = make_meta(season_pack_incomplete=True, tmdb_season_data=season, filelist=["Show.S01E01.mkv", "Show.S01E07.mkv"])
+    assert tracker().get_season_title(sparse) == "Season 1, Episode 01, 07"
+
+
+def test_miniseries_and_tv_movies_use_the_rules_labels():
+    site = tracker()
+    assert site.get_season_title(make_meta(tmdb_type="Miniseries")) == "Miniseries"
+    movie = make_meta(category="MOVIE", tv_pack=False, genres=["TV Movie", "Drama"], year=1977)
+    assert site.get_season_title(movie) == "TV Movie"
+    assert asyncio.run(site.get_name(movie)) == "Almost Grown - TV Movie (1977)"
+    data = asyncio.run(site.get_upload_data(movie, preview=True))
+    assert (data["rt_link_type"], data["tvtropes_link_type"], data["tvdb_link_type"]) == ("m", "Film", "movies")
+    assert "tv.movie" in data["tags"]
+    assert asyncio.run(site.get_additional_checks(movie))
+    assert not asyncio.run(site.get_additional_checks(make_meta(category="MOVIE", tv_pack=False, genres=["Drama"])))
+
+
+def test_container_and_format_notes():
+    site = tracker()
+    assert site.get_video_format(make_meta(is_disc="DVD", video_codec="", video_encode="")) == "MPEG-2"
+    assert site.get_container(make_meta(filelist=["Show.S01E01.ts"])) == "TS"
+    assert site.get_container(make_meta(filelist=["00001.m2ts"])) == "m2ts/bdmv"
+    assert site.get_audio_format(make_meta(audio="MPEG Audio Layer 3")) == "MP3"
+
+
+def test_hevc_is_only_allowed_at_2160p_and_up():
+    site = tracker()
+    assert not asyncio.run(site.get_additional_checks(make_meta(video_codec="HEVC", video_encode="x265", resolution="1080p")))
+    assert asyncio.run(site.get_additional_checks(make_meta(video_codec="HEVC", video_encode="x265", resolution="2160p")))
+    assert asyncio.run(site.get_additional_checks(make_meta(resolution="576p")))
+
+
+def test_youtube_is_not_a_web_source():
+    assert tracker().get_media(make_meta(type="WEBDL", source="WEB", service="YT")) == "Unknown"
+    assert tracker().get_media(make_meta(type="WEBDL", source="WEB", service="NF")) == "Web"
+
+
+OTHER_SHOW_HTML = """
+<table id="torrent_table"><tbody>
+<tr class="torrent "><td><img alt="Comedy"></td>
+  <td><a href="torrents.php?id=900&amp;torrentid=901">Almost Grown - Series 1</a> (2005) (AVI/XviD/MP3/TV)</td>
+  <td>6</td><td class="nobr">1y</td><td class="nobr">1 GB</td><td>1</td><td>1</td><td>0</td></tr>
+</tbody></table>
+"""
+
+
+def test_same_name_show_without_imdb_match_blocks_the_upload_until_renamed():
+    async def run():
+        site = tracker()
+        site.cookie_validator.load_session_cookies = AsyncMock(return_value=httpx.Cookies({"session": "test"}))
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            html = '<table id="torrent_table"></table>' if "imdbid" in request.url.params else OTHER_SHOW_HTML
+            return httpx.Response(200, text=html, request=request)
+
+        site.session = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        await site.search_existing(make_meta())
+        await site.session.aclose()
+        item = make_meta()
+        blocked = await site.upload(item)
+        message = item.tracker_status["TVVAULT"]["status_message"]
+
+        renamed = make_meta(payload_edits={"TVVAULT": {"show": "Almost Grown (US)"}})
+        site.cookie_auth_uploader.handle_upload = AsyncMock(return_value=True)
+        allowed = await site.upload(renamed)
+        return blocked, message, allowed
+
+    blocked, message, allowed = asyncio.run(run())
+    assert TVVault.show_conflicts["tvv-test"] == "Almost Grown"
+    assert "tvv-test" not in TVVault.group_ids
+    assert blocked is False
+    assert "already on TV Vault" in message
+    assert allowed is True

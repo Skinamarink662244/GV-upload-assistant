@@ -401,7 +401,7 @@ uv tool install --force git+https://github.com/Skinamarink662244/wastaken-upload
 | <img src="web_ui/static/img/trackers/torrentleech.png" width="16" height="16" />              | TorrentLeech           | TORRENTLEECH           | MOVIE, TV, BOOK, GAME, MUSIC |
 | <img src="web_ui/static/img/trackers/totheglory.png" width="16" height="16" />                | ToTheGlory             | TOTHEGLORY             | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/tvchaosuk.png" alt="" width="16" height="16" />          | TV Chaos UK            | TVCHAOSUK              | MOVIE, TV                    |
-| <img src="web_ui/static/img/trackers/tvvault.png" alt="" width="16" height="16" />            | TV Vault               | TVVAULT                | TV                           |
+| <img src="web_ui/static/img/trackers/tvvault.png" alt="" width="16" height="16" />            | TV Vault               | TVVAULT                | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/xingyungept.png" width="16" height="16" />               | XingyungePT            | XINGYUNGEPT            | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/ulcx.png" width="16" height="16" />                      | ULCX                   | ULCX                   | MOVIE, TV                    |
 | <img src="web_ui/static/img/trackers/utopia.png" width="16" height="16" />                    | UTOPIA                 | UTOPIA                 | MOVIE, TV                    |
